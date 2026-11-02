@@ -21,13 +21,15 @@ private final class LoopbackInferenceDelegate: NSObject, URLSessionTaskDelegate 
     @Published var preparing = false
     private var server: Process?
     private let endpoint = URL(string: "http://127.0.0.1:11434")!
-    private let network: URLSession = {
+    private let network: URLSession
+    init(network: URLSession? = nil) { self.network = network ?? Self.makeNetwork() }
+    private static func makeNetwork() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
         config.connectionProxyDictionary = [:]
         config.timeoutIntervalForRequest = 300
         config.timeoutIntervalForResource = 3600
         return URLSession(configuration: config, delegate: LoopbackInferenceDelegate(), delegateQueue: nil)
-    }()
+    }
     func prepare() async {
         guard !preparing else { return }
         preparing = true
@@ -72,11 +74,16 @@ private final class LoopbackInferenceDelegate: NSObject, URLSessionTaskDelegate 
         }
         return data
     }
-    func generate(system: String, prompt: String, schema: [String: Any]? = nil) async throws -> String {
+    func generate(system: String, prompt: String, schema: [String: Any]? = nil, maximumTokens: Int = 1800) async throws -> String {
         guard prompt.count < 100_000 else { throw CopilotError.message(L10n.string("Материал слишком большой для локального контекста. Разделите встречу или сократите материалы.")) }
         try await ensureServer()
-        let data = try await request(path: "/api/generate", body: ["model": activeModel, "system": system, "prompt": prompt, "stream": false, "format": schema as Any? ?? "json", "options": ["temperature": 0, "num_ctx": 32768, "num_predict": 1800]])
-        struct Response: Decodable { var response: String }
-        return try JSONDecoder().decode(Response.self, from: data).response
+        let data = try await request(path: "/api/generate", body: ["model": activeModel, "system": system, "prompt": prompt, "stream": false, "format": schema as Any? ?? "json", "options": ["temperature": 0, "num_ctx": 32768, "num_predict": min(4096, max(256, maximumTokens))]])
+        struct Response: Decodable { var response: String; var done: Bool; var done_reason: String? }
+        let result = try JSONDecoder().decode(Response.self, from: data)
+        guard result.done, result.done_reason != "length" else {
+            throw CopilotError.message(L10n.string("Модель не закончила ответ в пределах лимита. Повторите запрос или выберите другую локальную модель."))
+        }
+        try Task.checkCancellation()
+        return result.response
     }
 }

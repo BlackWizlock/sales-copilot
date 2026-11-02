@@ -4,6 +4,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 timeout 180 swift run --build-system native CoreChecks
 python3 "$repo_root/scripts/check-localizations.py"
+bash "$repo_root/scripts/check-local-intelligence.sh"
 bash "$repo_root/scripts/check-materials.sh"
 bash "$repo_root/scripts/check-connections.sh"
 bash "$repo_root/scripts/check-mcp.sh"

@@ -93,7 +93,7 @@ Full worktree ci-local passed before the final async-picker change; the portable
 
 Capture acceptance remains incomplete: the installed app awaits the macOS microphone access response before creating the test recording. System-audio source discovery succeeded. No permission reset performed. Second Mac, live Zoom/Telemost quality, real CRM write/native Bitrix analysis and clean-checkout full CI are not established by the preceding checks.
 
-Build8 capture follow-up: owner granted microphone permission. Two native starts failed with -10875; CoreAudio reported client input/output format mismatch. Hardware defaults: microphone48kHz, output44.1kHz. Standalone configuration regression failed at48000/44100, then passed at48000/48000 after explicit mixer→output client-rate alignment. This changes no system device settings and retains voice processing. Build9 adds this guard to --verify-voice-processing and a day-properties sheet; native acceptance pending.
+Build8 capture follow-up: owner granted microphone permission. Two native starts failed with -10875; CoreAudio reported client input/output format mismatch. Hardware defaults: microphone48kHz, output44.1kHz. Standalone configuration regression failed at48000/44100, then passed at48000/48000 after explicit mixer-to-output client-rate alignment. This changes no system device settings and retains voice processing. Build9 adds this guard to --verify-voice-processing and a day-properties sheet; native acceptance pending.
 
 ## Кандидат 0.3.1(11)
 
@@ -108,3 +108,9 @@ Build8 capture follow-up: owner granted microphone permission. Two native starts
 Финальный ci-local после синхронной правки проверочного режима завершился exit0. Повторная упаковка11 завершилась exit0; встроенное ASR/M4A обработало синтетический архив13.89с за1.26с. Это не замер живой задержки. Signed helper установил11 и сохранил Previous.app10; установленный MCP initialize/list/ping/EOF exit0. Settings/MCP и обычный запуск нативно проверены, системного пароля не запрашивали. Реальный ключ остался закрыт до явной разблокировки пользователем. English/system вернулись без изменения языка материалов.
 
 Локальная подготовка канала выявила codesign extraction bug: раздельный необязательный prefix трактовался как цель и давал exit1. Исправлено на --extract-certificates=prefix для приложения и helper. Полная подготовка подписанного архива и JSON прошла exit0. Публикация и чистый checkout удержаны до разрешённого коммита: Jev final delta safe_to_apply0.21, composite0.645, correctness confidence0.07; все3 testclaims verified. Независимый stronger-review поддержал только обратимую локальную установку.
+
+## Проверка резюме 0.3.2(12)
+
+На установленной11 запись PR дважды завершалась общей ошибкой формата. Два последующих диагностических прогона того же текста через локальный код и контроллер завершились успешно, поэтому точная причина прежнего ответа не установлена. Содержимое записи не отправлялось наружу и не сохранялось в диагностические логи.
+
+Новые синтетические проверки production-runtime и контроллера подтверждают отказ незавершённому ответу, восстановление после неверного JSON за одну повторную попытку, ограничение повторов с сохранением прежнего резюме и отмену до начала генерации. Регрессия повторной попытки дала FAIL до исправления; удаление done/done_reason guard также даёт FAIL. Нативный проход12 и чистый checkout фиксируются после выполнения; тесты не заменяют проверку реальной модели.

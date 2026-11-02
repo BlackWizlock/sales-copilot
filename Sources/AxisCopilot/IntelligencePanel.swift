@@ -46,7 +46,23 @@ struct IntelligencePanel: View {
                 }
                 Button(LocalizedStringKey(model.summaryText.isEmpty ? L10n.string("Составить") : L10n.string("Обновить"))) { model.summarize() }.disabled(model.busySummary || model.snapshot?.canSummarize != true)
             }
-            if model.busySummary { ProgressView(L10n.string("Готовлю итоги и следующие шаги…")).controlSize(.small) }
+            if model.busySummary {
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(model.summaryProgress).font(.callout)
+                        if let started = model.summaryStartedAt {
+                            TimelineView(.periodic(from: started, by: 1)) { context in
+                                let seconds = max(0, Int(context.date.timeIntervalSince(started)))
+                                Text(L10n.format("Обработка на Mac · %@", String(format: "%d:%02d", seconds / 60, seconds % 60)))
+                                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                            }
+                        }
+                    }
+                    Spacer()
+                    Button(L10n.string("Отмена")) { model.cancelSummary() }
+                }
+            }
             if !model.summaryText.isEmpty {
                 if ui.editing {
                     TextEditor(text: $ui.draft).frame(minHeight: 240)

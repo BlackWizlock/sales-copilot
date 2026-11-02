@@ -573,3 +573,17 @@
 "Версия записи" = "Recording version";
 "Эхо снижено (копия)" = "Echo reduced (copy)";
 "Оригинал" = "Original";
+
+"Подготовка локальной модели…" = "Preparing the local model…";
+
+"Разбор записи: часть %@ из %@" = "Analyzing recording: part %@ of %@";
+
+"Собираю итог, договорённости и следующие шаги…" = "Combining the summary, decisions and next steps…";
+
+"Обработка на Mac · %@" = "Processing on Mac · %@";
+
+"Модель не закончила ответ в пределах лимита. Повторите запрос или выберите другую локальную модель." = "The model did not finish within the output limit. Retry or select another local model.";
+
+"Локальная модель дважды вернула неверный формат резюме. Повторите запрос или выберите другую модель в настройках. Запись сохранена." = "The local model returned an invalid summary format twice. Retry or select another model in Settings. Your recording is saved.";
+
+"Исправляю формат ответа модели…" = "Correcting the model response format…";
