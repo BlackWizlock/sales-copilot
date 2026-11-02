@@ -14,11 +14,11 @@ struct AxisBrandHeader: View {
                 Image(nsImage: image).renderingMode(.template).resizable()
                     .scaledToFit().frame(width: 30, height: 30).accessibilityHidden(true)
             }
-            Text("Аксис Суфлёр").font(.title3.weight(.semibold))
+            Text("Axis Copilot").font(.title3.weight(.semibold))
             Rectangle().fill(.white.opacity(0.3)).frame(width: 1, height: 24)
-            Text("Запись и транскрипция встреч").font(.callout)
+            Text(L10n.string("Запись и транскрипция встреч")).font(.callout)
             Spacer()
-            Label("На этом Mac", systemImage: "lock.shield")
+            Label(L10n.string("На этом Mac"), systemImage: "lock.shield")
                 .font(.caption.weight(.medium))
         }
         .foregroundStyle(.white).padding(.horizontal, 24).padding(.vertical, 13)
@@ -29,16 +29,16 @@ struct AxisBrandHeader: View {
 struct AxisProductCredits: View {
     var body: some View {
         HStack(spacing: 18) {
-            Text("Разработано Аксис Консалт").fontWeight(.medium)
+            Text(L10n.string("Разработано Аксис Консалт")).fontWeight(.medium)
             Spacer(minLength: 12)
-            Link("Консалтинг", destination: URL(string: "https://axisconsult.ru")!)
-            Link("Платформа", destination: URL(string: "https://axisplatform.ru")!)
-            Link("Обучение", destination: URL(string: "https://edu.axisconsult.ru")!)
+            Link(L10n.string("Консалтинг"), destination: URL(string: "https://axisconsult.ru")!)
+            Link(L10n.string("Платформа"), destination: URL(string: "https://axisplatform.ru")!)
+            Link(L10n.string("Обучение"), destination: URL(string: "https://edu.axisconsult.ru")!)
         }
         .font(.caption).foregroundStyle(.white).tint(.white)
         .padding(.horizontal, 24).padding(.vertical, 12)
         .background(AxisBrand.navy)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Продукты Аксис")
+        .accessibilityLabel(L10n.string("Продукты Аксис"))
     }
 }

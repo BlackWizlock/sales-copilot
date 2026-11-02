@@ -15,6 +15,18 @@ func expectThrows<T>(_ expression: @autoclosure () throws -> T, file: StaticStri
 }
 @main struct CoreChecks {
     static func main() throws {
+        DeduplicationTests().run()
+        try CalendarGridTests().run()
+        CalendarNotesTests().run()
+        try UpdateFeedTests().run()
+        try IntelligenceTests().run()
+        try SupportMaterialTests().run()
+        try MeetingChatTests().run()
+        PromptContextTests().run()
+        try CRMChecks().run()
+        try ASRCatalogTests().run()
+        try MCPTests().run()
+        try DeletionTests().run()
         PlaybackTests().run()
         try SessionTests().testPCMFileHasCorrectLengthClippingAndRoundTrip()
         try SessionTests().testManifestRoundTripAndInterruptedRecovery()
@@ -27,6 +39,6 @@ func expectThrows<T>(_ expression: @autoclosure () throws -> T, file: StaticStri
         try WhisperTests().testOffsetsAreRelativeToMeetingAndSilenceIsFiltered()
         WhisperTests().testMalformedOutputFailsInsteadOfEmptySuccess()
         try SpeakerTests().run()
-        print("PASS: 10 core checks")
+        print("PASS: core recording checks and integration contracts")
     }
 }

@@ -76,3 +76,35 @@ Native final layout displays transcript and fixed player together. Timestamp at 
 Manual transcript scrolling disabled following and exposed «К текущей фразе»; activating it restored following. Manual phrase assignment survived leaving/reopening synthetic history. Final stronger-reasoner source/log review supports private branch and owner-review alpha with no Important/Critical blocker, while preserving all physical capture and real-meeting limitations. Canonical smart-commit explicitly stops on low safe_to_apply, so owner exception requested and commit/push remain pending. No repeated Jev calls were made to obtain a more favorable score.
 
 Owner then explicitly approved commit and push of the reviewed 0.2.0 candidate to private codex/recording-prototype despite Jev 0.28/0.23. This is a recorded exception, not a successful automated gate. No merge authorized; other-lead cross-review and live meeting acceptance remain outstanding.
+
+## Проверка кандидата 0.3.1(8)
+
+В установленном build7 восстановлено личное подключение и прочитан календарь. Живой read-only ответ выявил 18 экземпляров повторений с границами серии до 2038 в *_TS_UTC. Регрессия упала на неверном начале; после приоритета DATE_FROM/DATE_TO прошла. Повторное чтение 39 событий с исправленным декодером подтвердило отдельные даты и часовой пояс. Запись в CRM не выполнялась.
+
+Импорт материалов проверяется `bash scripts/check-materials.sh`: синтетические DOCX, PPTX, XLSX, TXT, HTML, RTF и отказы на пустом/избыточном/повреждённом содержимом, ссылке, папке, неподдерживаемом формате и ZIP с большим распакованным XML. `CHECK_OCR=1 bash scripts/check-materials.sh` дополнительно проверяет PNG и сканированный PDF через локальный Vision. DOC и HEIC отдельно не приняты.
+
+CoreChecks покрывает несколько материалов, миграцию старого КП, отсутствие дублей, атомарность пакета и удаление. Явный `AxisCopilot --verify-sales-hints` использует только синтетические материалы и существующую локальную модель; проверяет автоматическую подсказку по вопросу клиента и отсутствие отмены при новой микрофонной реплике. Это не проверка задержки и точности живой встречи. Установка build8, чистый checkout и публикация канала фиксируются после выполнения.
+
+## Build8 installed observations, 2026-11-02
+
+Signed helper installed 0.3.1(8) over build7, preserving the original history and Bitrix connection. CUA verified visible Meeting materials above tabs; native file-picker sheet imported two synthetic files (TXT and Markdown), and removing one left the other intact. Updater file sheet opened and Cancel returned to main window. Real read-only calendar showed two events on November2 and one on November5, without the former 18 false series spans. These are manual native observations, not CI assertions.
+
+Full worktree ci-local passed before the final async-picker change; the portable build and real synthetic Russian transcription/export passed after it. SalesHintVerification passed against local inference with two materials, correct terms.txt citation and microphone isolation. Jev final gate escalated on low confidence (safe_to_apply0.20, composite0.574); stronger other-lead source/log review supports owner alpha/private branch, with no confirmed P1/P2.
+
+Capture acceptance remains incomplete: the installed app awaits the macOS microphone access response before creating the test recording. System-audio source discovery succeeded. No permission reset performed. Second Mac, live Zoom/Telemost quality, real CRM write/native Bitrix analysis and clean-checkout full CI are not established by the preceding checks.
+
+Build8 capture follow-up: owner granted microphone permission. Two native starts failed with -10875; CoreAudio reported client input/output format mismatch. Hardware defaults: microphone48kHz, output44.1kHz. Standalone configuration regression failed at48000/44100, then passed at48000/48000 after explicit mixer→output client-rate alignment. This changes no system device settings and retains voice processing. Build9 adds this guard to --verify-voice-processing and a day-properties sheet; native acceptance pending.
+
+## Кандидат 0.3.1(11)
+
+Полный worktree ci-local завершился exit0: контракты ядра, импорт материалов, Keychain CRUD и тихий отказ чужого ACL, календарный редактор, настоящий MCP stdio, безопасный запуск из сделки, release-подпись, плеер на семи скоростях, плавающая панель, проверка/откат обновления, реальное русское ASR и M4A. Это не чистый checkout. После исправления запуска только синтетического календарного режима финальный полный прогон выполняется отдельно.
+
+Нативный синтетический календарь показал заголовок, абзацы, жирный текст, списки, подписанные ссылки и название сделки/компании. Редактор проверен выделением жирным, предпросмотром и отменой; исходное описание осталось прежним. Transport этого режима отклоняет все записи и неизвестные методы; реальные CRM и Keychain не используются. Асинхронная предварительная загрузка перед SwiftUI App.main блокировала задачи проверки; режим исправлен на синхронный запуск SwiftUI с загрузкой из view.task и проверен повторно.
+
+Локализация:523 ключа RU/EN и42 форматных шаблона; runtime-проверка прошла. Системные и сторонние ошибки, отдельный updater сохраняют свой язык; уже вычисленное сообщение сменит язык при следующем событии.
+
+Офлайн-обработка эха:10 синтетических проверок прошли, включая настоящий AAC encode/decode и сохранность оригинала. Для старой PR создана отдельная приватная meeting.echo-reduced.m4a; субъективная слышимость эха и сохранность тихой одновременной речи не приняты. Плеер показывает выбор копии только при её наличии. Живые Zoom/Телемост, второй Mac, публикация канала, чистый checkout и штатный анализ Битрикс24 остаются отдельными открытыми пунктами STATUS.md.
+
+Финальный ci-local после синхронной правки проверочного режима завершился exit0. Повторная упаковка11 завершилась exit0; встроенное ASR/M4A обработало синтетический архив13.89с за1.26с. Это не замер живой задержки. Signed helper установил11 и сохранил Previous.app10; установленный MCP initialize/list/ping/EOF exit0. Settings/MCP и обычный запуск нативно проверены, системного пароля не запрашивали. Реальный ключ остался закрыт до явной разблокировки пользователем. English/system вернулись без изменения языка материалов.
+
+Локальная подготовка канала выявила codesign extraction bug: раздельный необязательный prefix трактовался как цель и давал exit1. Исправлено на --extract-certificates=prefix для приложения и helper. Полная подготовка подписанного архива и JSON прошла exit0. Публикация и чистый checkout удержаны до разрешённого коммита: Jev final delta safe_to_apply0.21, composite0.645, correctness confidence0.07; все3 testclaims verified. Независимый stronger-review поддержал только обратимую локальную установку.

@@ -67,6 +67,12 @@ enum UpdateValidation {
         guard try certificate(candidate) == signer else { throw UpdateFailure("Обновление подписано другим сертификатом.") }
         guard let oldVersion = old["CFBundleVersion"] as? String, let newVersion = new["CFBundleVersion"] as? String,
               try isNewer(newVersion, than: oldVersion) else { throw UpdateFailure("Нужна сборка с более новым номером версии.") }
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        let systemVersion = "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)"
+        guard let minimumOS = new["LSMinimumSystemVersion"] as? String,
+              !(try isNewer(minimumOS, than: systemVersion)) else {
+            throw UpdateFailure("Для обновления нужна более новая версия macOS.")
+        }
         let binary = candidate.appendingPathComponent("Contents/MacOS/AxisCopilot")
         let executable = binary.resolvingSymlinksInPath()
         guard executable.path.hasPrefix(candidate.resolvingSymlinksInPath().path + "/"),

@@ -6,15 +6,14 @@ import CopilotCore
 enum CapturePhase { case idle, starting, recording, stopping }
 
 @MainActor final class MeetingModel: ObservableObject {
-    @Published var showSettings = false
     @Published var phase: CapturePhase = .idle
     @Published var sessions: [MeetingSession] = []
-    @Published var current: MeetingSession?
+    @Published var current: MeetingSession? { didSet { coordinateFeatures() } }
     @Published var applications: [SCRunningApplication] = []
     @Published var selectedPID: Int32 = 0
-    @Published var title = "Новая встреча"
+    @Published var title = L10n.string("Новая встреча")
     @Published var error: String?
-    @Published var status = "Готов к настройке"
+    @Published var status = L10n.string("Готов к настройке")
     @Published var levels: [AudioSource: Float] = [:]
     @Published var lastSamples: [AudioSource: Double] = [:]
     @Published var clock = Date()
@@ -32,10 +31,14 @@ enum CapturePhase { case idle, starting, recording, stopping }
     let updater = AppUpdater()
     @Published var preparingPlayback = false
     @Published var analyzingSpeakers = false
-    @Published var speakerStatus = "Голоса ещё не разделены"
+    @Published var speakerStatus = L10n.string("Голоса ещё не разделены")
     private var speakerAttempts = Set<UUID>()
+    let intelligence = LocalIntelligence()
+    let asrModels = ASRModelManager()
+    private(set) var crm: CRMController?
 
-    var locked: Bool { phase != .idle || processing || exporting || preparingPlayback || analyzingSpeakers || updater.isUpdating }
+    var updateBusy: Bool { phase != .idle || processing || exporting || preparingPlayback || analyzingSpeakers || intelligence.busyMaterials || intelligence.busySummary || intelligence.busySuggestion || intelligence.busyChat || crm?.busy == true }
+    var locked: Bool { intelligence.busyMaterials || phase != .idle || processing || exporting || preparingPlayback || analyzingSpeakers || updater.isInstalling }
     var pending: Int { current?.chunks.filter { $0.state == .pending }.count ?? 0 }
     var failed: Int { current?.chunks.filter { $0.state == .failed }.count ?? 0 }
     var elapsed: String {
@@ -44,16 +47,17 @@ enum CapturePhase { case idle, starting, recording, stopping }
         return String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
     var transcriber: LocalTranscriber {
-        LocalTranscriber(executable: URL(fileURLWithPath: executablePath), model: URL(fileURLWithPath: modelPath))
+        LocalTranscriber.selected(executable: URL(fileURLWithPath: executablePath), fallbackModel: URL(fileURLWithPath: modelPath))
     }
 
     init() {
         do {
             let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/AxisSalesCopilot/Meetings")
             store = try SessionStore(root: root)
+            crm = CRMController(store: store!)
             sessions = try store!.loadAll()
             if let warning = store?.loadWarnings.first { error = warning }
-        } catch { self.error = "Хранилище недоступно: \(error.localizedDescription)" }
+        } catch { self.error = L10n.format("Хранилище недоступно: %@", String(describing: L10n.error(error))) }
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.clock = Date() }
         }
@@ -62,6 +66,15 @@ enum CapturePhase { case idle, starting, recording, stopping }
     func saveSettings() {
         UserDefaults.standard.set(modelPath, forKey: "modelPath")
         UserDefaults.standard.set(executablePath, forKey: "executablePath")
+    }
+
+    private func coordinateFeatures() {
+        crm?.activate(session: current)
+        intelligence.observe(current, directory: current.flatMap { store?.directory($0.id) })
+        if let id = current?.id, let context = crm?.context(for: id), intelligence.record.dealText != context.asPlainText {
+            intelligence.record.dealText = context.asPlainText
+            intelligence.updateContext()
+        }
     }
 
     func refreshApplications() async {
@@ -73,8 +86,8 @@ enum CapturePhase { case idle, starting, recording, stopping }
             applications = content.applications.filter { !$0.applicationName.isEmpty && $0.processID != ProcessInfo.processInfo.processIdentifier }
                 .sorted { $0.applicationName.localizedCaseInsensitiveCompare($1.applicationName) == .orderedAscending }
             if selectedPID != 0 && !applications.contains(where: { $0.processID == selectedPID }) { selectedPID = 0 }
-            status = "Выберите приложение встречи и нажмите «Начать»"
-        } catch { self.error = "Нет доступа к звуку экрана: \(error.localizedDescription). Разрешите запись экрана и системного аудио в настройках macOS." }
+            status = L10n.string("Выберите приложение встречи и нажмите «Начать»")
+        } catch { self.error = L10n.format("Нет доступа к звуку экрана: %@. Разрешите запись экрана и системного аудио в настройках macOS.", String(describing: L10n.error(error))) }
     }
 
     func start() async {
@@ -85,12 +98,13 @@ enum CapturePhase { case idle, starting, recording, stopping }
         do {
             try transcriber.validate()
             let allowed = await AVCaptureDevice.requestAccess(for: .audio)
-            guard allowed else { throw CopilotError.message("Разрешите доступ к микрофону в настройках конфиденциальности macOS.") }
+            guard allowed else { throw CopilotError.message(L10n.string("Разрешите доступ к микрофону в настройках конфиденциальности macOS.")) }
             let content = try await SCShareableContent.current
             let application = content.applications.first { $0.processID == selectedPID }
-            if selectedPID != 0 && application == nil { throw CopilotError.message("Выбранное приложение закрыто. Обновите список.") }
-            var session = try store.create(title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Встреча" : title)
-            session.sourceName = application?.applicationName ?? "Все приложения"
+            if selectedPID != 0 && application == nil { throw CopilotError.message(L10n.string("Выбранное приложение закрыто. Обновите список.")) }
+            var session = try store.create(title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.string("Встреча") : title)
+            session.sourceName = application?.applicationName ?? L10n.string("Все приложения")
+            crm?.activate(session: session, isNew: true)
             current = session
             try store.save(session)
             let id = session.id
@@ -116,13 +130,13 @@ enum CapturePhase { case idle, starting, recording, stopping }
             try await capture.start(content: content, application: application, folder: store.directory(id))
             if let startupFailure { throw CopilotError.message(startupFailure) }
             phase = .recording
-            status = "Запись идёт. Проверяйте оба индикатора звука."
+            status = L10n.string("Запись идёт. Проверяйте оба индикатора звука.")
         } catch {
             if let capture { _ = try? await capture.stop() }
             capture = nil; phase = .idle
             if current?.state == .recording { current?.state = .interrupted; current?.ended = Date(); persist() }
-            self.error = error.localizedDescription
-            status = "Запись не началась"
+            self.error = L10n.error(error)
+            status = L10n.string("Запись не началась")
         }
     }
 
@@ -133,7 +147,7 @@ enum CapturePhase { case idle, starting, recording, stopping }
         do {
             let chunks = try await capture?.stop() ?? []
             if let id = current?.id { for chunk in chunks { accept(chunk, sessionID: id) } }
-        } catch { stopFailed = true; self.error = error.localizedDescription; current?.issues.append(error.localizedDescription) }
+        } catch { stopFailed = true; self.error = L10n.error(error); current?.issues.append(L10n.error(error)) }
         if let id = current?.id, let capture {
             for chunk in capture.savedChunks() { accept(chunk, sessionID: id) }
         }
@@ -142,7 +156,7 @@ enum CapturePhase { case idle, starting, recording, stopping }
         current?.state = interrupted || stopFailed ? .interrupted : .processing
         phase = .idle
         persist()
-        status = "Запись завершена. Дораспознаём сохранённое аудио."
+        status = L10n.string("Запись завершена. Дораспознаём сохранённое аудио.")
         kickWorker()
         await exportRecording()
         completeIfReady()
@@ -172,8 +186,8 @@ enum CapturePhase { case idle, starting, recording, stopping }
                     self.current?.transcript.sort { $0.start < $1.start }
                     self.setChunk(chunk.id, state: .completed, error: nil)
                 } catch {
-                    self.setChunk(chunk.id, state: .failed, error: error.localizedDescription)
-                    self.error = error.localizedDescription
+                    self.setChunk(chunk.id, state: .failed, error: L10n.error(error))
+                    self.error = L10n.error(error)
                 }
                 self.persist()
             }
@@ -191,8 +205,8 @@ enum CapturePhase { case idle, starting, recording, stopping }
             current?.state = failed > 0 ? .interrupted : .completed
             persist()
         }
-        if current?.state == .interrupted { status = "Встреча прервана. Сохранённые фрагменты доступны."; return }
-        status = failed > 0 ? "Аудио сохранено. Часть фрагментов требует повторного распознавания." : "Встреча сохранена локально"
+        if current?.state == .interrupted { status = L10n.string("Встреча прервана. Сохранённые фрагменты доступны."); return }
+        status = failed > 0 ? L10n.string("Аудио сохранено. Часть фрагментов требует повторного распознавания.") : L10n.string("Встреча сохранена локально")
         if let current, current.state == .completed, current.speakerTurns == nil, !speakerAttempts.contains(current.id), !analyzingSpeakers { analyzeSpeakers() }
     }
 
@@ -207,29 +221,40 @@ enum CapturePhase { case idle, starting, recording, stopping }
         playback.stop()
         current = sessions.first { $0.id == id }
         if let current { title = current.title }
-        speakerStatus = current?.speakerTurns == nil ? "Голоса ещё не разделены" : "Голоса разделены локально"
+        speakerStatus = current?.speakerTurns == nil ? L10n.string("Голоса ещё не разделены") : L10n.string("Голоса разделены локально")
         levels = [:]; lastSamples = [:]; error = nil
     }
 
     func newMeeting() {
         guard !locked else { return }
-        playback.stop(); current = nil; title = "Новая встреча"; levels = [:]; lastSamples = [:]; error = nil
-        status = "Выберите приложение встречи и нажмите «Начать»"
+        playback.stop(); current = nil; title = L10n.string("Новая встреча"); levels = [:]; lastSamples = [:]; error = nil
+        status = L10n.string("Выберите приложение встречи и нажмите «Начать»")
+    }
+
+    func deleteMeeting(_ id: UUID) {
+        guard !locked, !updateBusy, let store else { return }
+        playback.stop()
+        do {
+            try store.deleteMeeting(id)
+            if current?.id == id { newMeeting() }
+            sessions.removeAll { $0.id == id }
+            speakerAttempts.remove(id)
+        } catch { self.error = L10n.string("Не удалось удалить встречу") + ": " + L10n.error(error) }
     }
 
     func analyzeSpeakers() {
         guard !locked, let current, let store else { return }
         speakerAttempts.insert(current.id)
-        analyzingSpeakers = true; speakerStatus = "Разделяем голоса на этом Mac"
+        analyzingSpeakers = true; speakerStatus = L10n.string("Разделяем голоса на этом Mac")
         Task {
             defer { analyzingSpeakers = false }
             do {
                 let turns = try await LocalDiarizer().process(session: current, store: store)
                 guard self.current?.id == current.id else { return }
                 self.current?.applySpeakerTurns(turns)
-                speakerStatus = turns.isEmpty ? "Речь для разделения голосов не найдена" : "Голоса разделены локально. Проверьте назначения."
+                speakerStatus = turns.isEmpty ? L10n.string("Речь для разделения голосов не найдена") : L10n.string("Голоса разделены локально. Проверьте назначения.")
                 persist()
-            } catch { speakerStatus = "Голоса не разделены: \(error.localizedDescription)" }
+            } catch { speakerStatus = L10n.format("Голоса не разделены: %@", String(describing: L10n.error(error))) }
         }
     }
 
@@ -251,7 +276,7 @@ enum CapturePhase { case idle, starting, recording, stopping }
             try store.save(current)
             if let i = sessions.firstIndex(where: { $0.id == current.id }) { sessions[i] = current }
             else { sessions.insert(current, at: 0) }
-        } catch { self.error = "Не удалось сохранить состояние встречи: \(error.localizedDescription)" }
+        } catch { self.error = L10n.format("Не удалось сохранить состояние встречи: %@", String(describing: L10n.error(error))) }
     }
 
     func revealFolder() {
@@ -261,7 +286,11 @@ enum CapturePhase { case idle, starting, recording, stopping }
 
     func play(_ line: TranscriptLine? = nil) {
         guard phase == .idle, !preparingPlayback, !exporting, let current, let store else { return }
-        if playback.isLoaded {
+        let original: URL
+        do { original = try store.fileURL(current.id, filename: "meeting.m4a") }
+        catch { self.error = L10n.format("Не удалось воспроизвести: %@. Исходные фрагменты сохранены.", L10n.error(error)); return }
+        let archive = playback.preferEchoReduced ? (echoReducedURL ?? original) : original
+        if playback.isLoaded(from: archive) {
             if let line { playback.seek(to: line.start); playback.play() }
             else { playback.toggle() }
             return
@@ -270,24 +299,30 @@ enum CapturePhase { case idle, starting, recording, stopping }
         Task {
             defer { preparingPlayback = false }
             do {
-                let archive = try store.fileURL(current.id, filename: "meeting.m4a")
+                let archive = playback.preferEchoReduced ? (echoReducedURL ?? original) : original
                 if !FileManager.default.fileExists(atPath: archive.path) {
-                    guard !current.chunks.isEmpty else { throw CopilotError.message("У этой встречи нет аудиозаписи") }
+                    guard !current.chunks.isEmpty else { throw CopilotError.message(L10n.string("У этой встречи нет аудиозаписи")) }
                     try await RecordingExport.export(session: current, store: store)
                 }
                 guard self.current?.id == current.id, phase == .idle else { return }
                 try playback.load(url: archive)
                 if let line { playback.seek(to: line.start) }
                 playback.play()
-            } catch { self.error = "Не удалось воспроизвести: \(error.localizedDescription). Исходные фрагменты сохранены." }
+            } catch { self.error = L10n.format("Не удалось воспроизвести: %@. Исходные фрагменты сохранены.", String(describing: L10n.error(error))) }
         }
     }
+
+    private var echoReducedURL: URL? {
+        guard let current, let store else { return nil }
+        return PlaybackController.echoReducedURL(store: store, meetingID: current.id)
+    }
+    var hasEchoReduced: Bool { echoReducedURL != nil }
 
     func exportRecording() async {
         guard let current, let store, !current.chunks.isEmpty, !exporting else { return }
         exporting = true
         defer { exporting = false }
         do { try await RecordingExport.export(session: current, store: store) }
-        catch { self.error = "Исходные WAV сохранены; сборка M4A не удалась: \(error.localizedDescription)" }
+        catch { self.error = L10n.format("Исходные WAV сохранены; сборка M4A не удалась: %@", String(describing: L10n.error(error))) }
     }
 }

@@ -1,43 +1,104 @@
-# Axis Суфлёр
+# Axis Copilot
 
-Нативный локальный прототип для Mac: запись микрофона и звука выбранного приложения, русская транскрипция, история встреч и воспроизведение по отметке времени. Запись запускается кнопкой. После остановки сохраняется общий M4A, исходные WAV и JSON с текстом.
+A local-first macOS meeting assistant by [Axis Consult](https://axisconsult.ru).
+Record meetings, transcribe locally, prepare meeting notes and sales suggestions,
+and connect your own Bitrix24 account. No subscription is required for local
+features. This is alpha software; review generated facts against the recording.
 
-Распознавание работает через whisper.cpp и мультиязычную модель small. Подписки, ключи и платные API для этого среза не нужны. Приложение не отправляет аудио в сеть. Модель загружается отдельно один раз.
+## Requirements and build
 
-## Подготовка
+macOS 15 or later, Apple Silicon. Developers need Swift 6 / Command Line Tools
+and Homebrew. End users use the packaged application and download models in its settings.
 
-Требуются macOS 15+, Swift 6 / Command Line Tools, Homebrew. На проверенном Mac установлен Swift 6.4, полного Xcode нет.
-
-```bash
-brew install whisper.cpp coreutils ffmpeg
+```sh
+brew install whisper.cpp coreutils ffmpeg ollama
 bash scripts/setup-model.sh
+bash scripts/setup-signing.sh
 bash scripts/build-app.sh
 ```
 
-Готовое приложение: `_output/AxisCopilot.app`. Скопируйте его в `~/Applications` и запустите. Подпись локальная ad-hoc, notarization и автообновления пока отсутствуют. После пересборки macOS может потребовать повторного разрешения.
+The app is written to `_output/AxisCopilot.app`. Install it in Applications.
+Your signing identity stays in Keychain. Source builders must configure their
+own signing identity and update feed. Alpha signing is not Apple notarization.
 
-## Первая встреча
+## Meeting workflow
 
-1. Разрешите приложению микрофон и «Запись экрана и системного аудио» в настройках конфиденциальности macOS.
-2. Нажмите обновление списка, выберите Zoom, Яндекс Телемост или браузер с встречей. «Все приложения» захватывает весь системный звук. Вкладки одного браузера отдельно не изолируются.
-3. Введите название и нажмите «Начать встречу». Проверьте оба индикатора: они показывают поступление данных отдельно от громкости.
-4. Через каждые 8 секунд накопленного звука фрагменты отправляются в локальную очередь распознавания. Это не пословный стриминг; паузы и границы фрагментов могут влиять на текст.
-5. Нажмите «Завершить». Дождитесь обработки и сборки M4A. Откройте папку записей или прослушайте текст по времени.
+1. Grant microphone and screen/system-audio access when macOS asks.
+2. Choose the meeting application, or explicitly capture all application audio.
+3. Connect your own Bitrix24 account and select a deal or calendar event. Drop
+   reference documents into Meeting materials, or click the drop zone to choose
+   multiple files. Materials can be contracts, requirements, proposals, slides,
+   tables or other reference documents. Joining a link does not start recording.
+4. Start recording explicitly. Audio is saved in recoverable chunks and transcribed
+   locally. The meeting window hides after a successful start; a draggable floating
+   recording indicator shows live audio levels. Click it for the timer, both audio
+   sources, Open meeting and Stop controls. A failed start keeps the error visible.
+   Automatic suggestions require a downloaded local language model. New hints
+   appear in the meeting view and expand the floating panel, with the client
+   phrase, a verified source excerpt and the material filename.
+5. Stop recording and wait for queued transcription. Review notes, transcript,
+   speaker assignments and playback. Review each CRM export before sending it.
 
-Данные: `~/Library/Application Support/AxisSalesCopilot/Meetings/<UUID>/`. Модель: соседняя папка `Models/`. Доступ к папкам ограничен текущим пользователем; шифрование силами приложения не реализовано. Сохранение в Битрикс24 пока отсутствует.
+The sidebar separates Meetings and a month Calendar. Select a day to see its events,
+join a verified Zoom/Telemost link, or prepare a new recording from the linked deal.
+Meeting tabs are Summary, Transcript and Chat. Chat answers cite transcript phrases;
+click a citation to play the recording from that point. Settings open in a separate
+native window with categories, normal close/minimize controls and Escape to close.
 
-Сбой распознавания не удаляет аудио: кнопку повторной обработки можно использовать после исправления пути к модели/CLI в настройках. После аварийного закрытия сохранённые сегменты загружаются как прерванная встреча. Несохранённый фрагмент из оперативной памяти при аварии теряется.
+Material import supports PDF, TXT, Markdown, CSV/TSV, JSON, DOC/DOCX, RTF,
+HTML, PPTX, XLSX and PNG/JPEG/TIFF/HEIC images. Scanned PDF pages and images use
+local Russian/English OCR. Import extracts text; original layout, charts and
+formulas are not interpreted. Limits: 12 files, 20 MB and 60,000 characters per
+file, 240,000 characters per meeting. Unsupported or unreadable files produce
+an explicit error and leave existing materials intact.
 
-## Проверки и границы
+Speaker names are assigned manually after local voice grouping. Browser capture
+can include other tabs. Headphones are recommended; echo quality must be checked
+with your devices. Updating does not repair previously recorded audio.
 
-```bash
+## Models and languages
+
+Settings provide local ASR model selection, downloads and verification. Parakeet
+TDT 0.6B v3 and multilingual Whisper models use different local engines. UI
+language and recognition language are separate settings. Russian and English
+resources live under `Resources/*.lproj`.
+
+Meeting notes and sales suggestions use local Ollama inference. Initial downloads
+require internet; downloaded models do not require paid APIs. Optional cloud
+features require separate configuration and do not replace private local inference.
+
+## Privacy and credentials
+
+Meetings live in `~/Library/Application Support/AxisSalesCopilot/Meetings`.
+Recordings, transcripts, reference documents and CRM snapshots are private runtime data.
+Do not commit them. Credentials belong in macOS Keychain, not source, logs or
+update archives. Build environment names are documented in [DEVELOPMENT.md](docs/DEVELOPMENT.md#environment-and-credentials).
+
+MCP access is opt-in per meeting. A cloud agent can forward text outside the Mac.
+CRM exports are explicit actions and do not silently change deal stages or amounts.
+See [SECURITY.md](SECURITY.md).
+
+## Development and releases
+
+```sh
 bash scripts/ci-local.sh
+python3 scripts/check-localizations.py
 ```
 
-Проверка собирает release .app, запускает 10 проверок ядра, затем реальное локальное распознавание синтетической русской речи и экспорт двух источников в M4A. Нужны установленная модель, whisper-cli, ffmpeg и голос Milena. Подробности и ручные сценарии: [docs/TESTING.md](docs/TESTING.md).
+Tests use synthetic data. File tests do not establish live Zoom/Telemost echo
+quality, speaker accuracy, or permissions on your CRM account. Evidence and limits:
+[docs/TESTING.md](docs/TESTING.md).
 
-КП, автоматический суфлёр, сделка/календарь Битрикс24, MCP и OpenRouter остаются следующими срезами. Замена Granola и совместная запись с ней ещё не проверены. Инструкции: [CLAUDE.md](CLAUDE.md), текущая работа: [STATUS.md](STATUS.md), полное согласованное [описание](docs/superpowers/specs/2026-11-02-sales-copilot-design.md).
+Signed archives and manifests are served over HTTPS. Clients notify users about
+newer builds; installation waits until idle and requires confirmation. Read
+[docs/UPDATES.md](docs/UPDATES.md), [docs/BITRIX.md](docs/BITRIX.md), and
+[docs/EMPLOYEE-INSTALL.md](docs/EMPLOYEE-INSTALL.md).
 
-## Установка сотруднику
+## Contributing and license
 
-Для Apple Silicon готовится переносимый ZIP с приложением, статическим whisper-cli и моделью внутри. Сотруднику не нужны Homebrew и среда разработки. Сборка: `bash scripts/package-employee.sh`; протокол: [docs/EMPLOYEE-INSTALL.md](docs/EMPLOYEE-INSTALL.md). На втором Mac требуется собственное разрешение микрофона/системного звука. Intel и notarization пока не включены.
+Use focused branches, keep tests synthetic, run local checks, and describe what
+you verified. Never upload private meeting examples to public issues.
+
+Source code is under the [MIT license](LICENSE). Third-party runtimes, libraries
+and models retain their licenses and notices. No trademark rights to the Axis
+Consult name or logo are granted.

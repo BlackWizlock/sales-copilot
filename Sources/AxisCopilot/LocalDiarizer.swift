@@ -22,7 +22,7 @@ struct LocalDiarizer {
 
     func process(session: MeetingSession, store: SessionStore) async throws -> [SpeakerTurn] {
         guard Self.modelsAvailable else {
-            throw CopilotError.message("Модели голосов не установлены. Выполните scripts/setup-speakers.sh или установите комплект с моделями.")
+            throw CopilotError.message(L10n.string("Модели голосов не установлены. Выполните scripts/setup-speakers.sh или установите комплект с моделями."))
         }
         return try await Task.detached(priority: .utility) {
             let configuration = MLModelConfiguration()
@@ -39,10 +39,10 @@ struct LocalDiarizer {
             for chunk in session.chunks.sorted(by: { $0.start == $1.start ? $0.source.rawValue < $1.source.rawValue : $0.start < $1.start }) {
                 try Task.checkCancellation()
                 guard chunk.start.isFinite, chunk.start >= 0, chunk.duration.isFinite, chunk.duration > 0 else {
-                    throw CopilotError.message("Некорректное время аудиофрагмента")
+                    throw CopilotError.message(L10n.string("Некорректное время аудиофрагмента"))
                 }
                 let audio = try WaveFile.decode(Data(contentsOf: store.fileURL(session.id, filename: chunk.filename)))
-                guard audio.sampleRate == 16000 else { throw CopilotError.message("Для голосов нужен звук 16 кГц mono") }
+                guard audio.sampleRate == 16000 else { throw CopilotError.message(L10n.string("Для голосов нужен звук 16 кГц mono")) }
                 guard !audio.samples.isEmpty else { continue }
                 let result = try manager.performCompleteDiarization(audio.samples)
                 for segment in result.segments {

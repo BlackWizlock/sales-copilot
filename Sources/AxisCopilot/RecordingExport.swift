@@ -17,7 +17,7 @@ enum RecordingExport {
             }
         }
         guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetAppleM4A) else {
-            throw CopilotError.message("M4A недоступен")
+            throw CopilotError.message(L10n.string("M4A недоступен"))
         }
         let output = try store.fileURL(session.id, filename: "meeting.m4a")
         let temporary = try store.fileURL(session.id, filename: "meeting-export.m4a")

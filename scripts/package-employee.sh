@@ -43,7 +43,9 @@ trap 'rm -rf "$fixture_dir"' EXIT
 timeout 30 say -v Milena -o "$fixture_dir/russian.aiff" 'Добрый день. Стоимость проекта составляет сто тысяч рублей. Срок выполнения работы четыре недели.'
 timeout 30 ffmpeg -v error -i "$fixture_dir/russian.aiff" -ar 16000 -ac 1 "$fixture_dir/russian.wav"
 timeout 120 "$app_path/Contents/MacOS/AxisCopilot" --verify-fixture "$fixture_dir/russian.wav"
-archive="$repo_root/_output/2026-11-02_v5_AxisCopilot-macos-arm64.zip"
+release_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_path/Contents/Info.plist")"
+release_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_path/Contents/Info.plist")"
+archive="$repo_root/_output/$(date +%Y-%m-%d)_v${release_build}_AxisCopilot-${release_version}-macos-arm64.zip"
 ditto -c -k --sequesterRsrc --keepParent "$bundle_dir" "$archive"
 shasum -a 256 "$archive" > "$archive.sha256"
 printf '%s\n' "$archive"

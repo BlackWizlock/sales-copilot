@@ -19,7 +19,7 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
     private var failed = false
 
     func start(content: SCShareableContent, application: SCRunningApplication?, folder: URL) async throws {
-        guard let display = content.displays.first else { throw CopilotError.message("Нет доступного экрана") }
+        guard let display = content.displays.first else { throw CopilotError.message(L10n.string("Нет доступного экрана")) }
         let filter: SCContentFilter
         if let application {
             filter = SCContentFilter(display: display, including: [application], exceptingWindows: [])
@@ -73,7 +73,7 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
                 guard let self else { return }
                 self.audioQueue.async {
                     guard self.active, self.monitoringMicrophone, !self.failed else { return }
-                    self.fail(CopilotError.message("Изменилось аудиоустройство. Запись остановлена; сохранённые фрагменты доступны. Выберите устройство и начните новую часть встречи."), source: .microphone)
+                    self.fail(CopilotError.message(L10n.string("Изменилось аудиоустройство. Запись остановлена; сохранённые фрагменты доступны. Выберите устройство и начните новую часть встречи.")), source: .microphone)
                 }
             }
             try microphone.start()
@@ -107,7 +107,7 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
         audioQueue.async { [self] in
             active = false
             do { try writer?.flush() } catch { failed = true }
-            onError?("Захват звука остановлен: \(error.localizedDescription)")
+            onError?(L10n.format("Захват звука остановлен: %@", String(describing: L10n.error(error))))
         }
     }
 
@@ -145,7 +145,7 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
 
     private func fail(_ error: Error, source: AudioSource) {
         failed = true
-        onError?("Ошибка записи \(source.title): \(error.localizedDescription). Завершите встречу; уже сохранённые сегменты доступны.")
+        onError?(L10n.format("Ошибка записи %@: %@. Завершите встречу; уже сохранённые сегменты доступны.", (source == .microphone ? L10n.string("Микрофон") : L10n.string("Звук встречи")), String(describing: L10n.error(error))))
     }
 
     private static func resample(_ sample: CMSampleBuffer) throws -> [Float] {
@@ -153,18 +153,18 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
               let format = AVAudioFormat(cmAudioFormatDescription: description) as AVAudioFormat?,
               let input = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(CMSampleBufferGetNumSamples(sample))),
               input.frameCapacity > 0 else {
-            throw CopilotError.message("Неподдерживаемый формат звука")
+            throw CopilotError.message(L10n.string("Неподдерживаемый формат звука"))
         }
         input.frameLength = input.frameCapacity
         let status = CMSampleBufferCopyPCMDataIntoAudioBufferList(sample, at: 0, frameCount: Int32(input.frameLength), into: input.mutableAudioBufferList)
-        guard status == noErr else { throw CopilotError.message("Ошибка PCM: \(status)") }
+        guard status == noErr else { throw CopilotError.message(L10n.format("Ошибка PCM: %@", String(describing: status))) }
         return try resample(input)
     }
 
     private static func resample(_ input: AVAudioPCMBuffer) throws -> [Float] {
         guard let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false),
               let converter = AVAudioConverter(from: input.format, to: target) else {
-            throw CopilotError.message("Не удалось преобразовать микрофон")
+            throw CopilotError.message(L10n.string("Не удалось преобразовать микрофон"))
         }
         let capacity = AVAudioFrameCount(ceil(Double(input.frameLength) * 16000 / input.format.sampleRate)) + 32
         guard let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return [] }

@@ -24,7 +24,7 @@ for name, version in [('Current','1'),('New','2'),('Old','0'),('WrongArch','2'),
     app=root/(name+'.app')/'Contents'
     (app/'MacOS').mkdir(parents=True)
     with (app/'Info.plist').open('wb') as out:
-        plistlib.dump(dict(CFBundleIdentifier='ru.axisconsult.SalesCopilot',CFBundleVersion=version,CFBundleExecutable='AxisCopilot',CFBundlePackageType='APPL'),out)
+        plistlib.dump(dict(CFBundleIdentifier='ru.axisconsult.SalesCopilot',CFBundleVersion=version,CFBundleExecutable='AxisCopilot',CFBundlePackageType='APPL',LSMinimumSystemVersion='15.0'),out)
 (root/'main.c').write_text('int main(void) { return 0; }\n')
 PY
 clang -target arm64-apple-macos15.0 "$fixture/main.c" -o "$fixture/arm64"

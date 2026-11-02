@@ -8,6 +8,9 @@ import CopilotCore
     @Published private(set) var isPlaying = false
     @Published private(set) var isLoaded = false
     @Published var error: String?
+    @Published var preferEchoReduced = true {
+        didSet { if preferEchoReduced != oldValue { stop() } }
+    }
     @Published var rate: Double {
         didSet {
             guard PlaybackTimeline.rates.contains(rate) else { rate = 1; return }
@@ -29,20 +32,28 @@ import CopilotCore
         if self.url == url && isLoaded { return }
         stop()
         let audio = try AVAudioPlayer(contentsOf: url)
-        guard audio.duration.isFinite, audio.duration > 0 else { throw CopilotError.message("Аудиофайл пуст или повреждён") }
+        guard audio.duration.isFinite, audio.duration > 0 else { throw CopilotError.message(L10n.string("Аудиофайл пуст или повреждён")) }
         audio.enableRate = true
         audio.rate = Float(rate)
         audio.volume = Float(volume)
         audio.delegate = self
-        guard audio.prepareToPlay() else { throw CopilotError.message("Не удалось подготовить аудио") }
+        guard audio.prepareToPlay() else { throw CopilotError.message(L10n.string("Не удалось подготовить аудио")) }
         player = audio; self.url = url; duration = audio.duration; isLoaded = true; error = nil
+    }
+    func isLoaded(from candidate: URL) -> Bool { isLoaded && url == candidate }
+    static func echoReducedURL(store: SessionStore, meetingID: UUID) -> URL? {
+        guard let candidate = try? store.fileURL(meetingID, filename: "meeting.echo-reduced.m4a"),
+              candidate.standardizedFileURL == candidate.resolvingSymlinksInPath().standardizedFileURL,
+              let values = try? candidate.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
+              values.isRegularFile == true, values.isSymbolicLink != true else { return nil }
+        return candidate
     }
     func toggle() { isPlaying ? pause() : play() }
     func play() {
         guard let player else { return }
         if position >= duration { seek(to: 0) }
         player.rate = Float(rate)
-        guard player.play() else { error = "Не удалось начать воспроизведение"; return }
+        guard player.play() else { error = L10n.string("Не удалось начать воспроизведение"); return }
         isPlaying = true
         timer?.invalidate()
         let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
@@ -72,11 +83,11 @@ import CopilotCore
             guard let self, self.player === player else { return }
             self.timer?.invalidate(); self.timer = nil; self.isPlaying = false
             if flag { self.position = self.duration }
-            else { self.error = "Воспроизведение прервано" }
+            else { self.error = L10n.string("Воспроизведение прервано") }
         }
     }
     nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
-        let message = error?.localizedDescription ?? "Не удалось прочитать аудио"
+        let message = error?.localizedDescription ?? L10n.string("Не удалось прочитать аудио")
         Task { @MainActor [weak self] in
             guard let self, self.player === player else { return }
             self.pause(); self.error = message

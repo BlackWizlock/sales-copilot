@@ -14,6 +14,9 @@ cp "$bin_dir/AxisCopilot" "$app_path/Contents/MacOS/AxisCopilot"
 cp "$repo_root/Resources/Info.plist" "$app_path/Contents/Info.plist"
 cp "$repo_root/Resources/axis_sign.png" "$app_path/Contents/Resources/axis_sign.png"
 cp "$repo_root/Resources/AppIcon.icns" "$app_path/Contents/Resources/AppIcon.icns"
+for locale in "$repo_root/Resources/"*.lproj; do
+    [[ ! -d "$locale" ]] || ditto "$locale" "$app_path/Contents/Resources/$(basename "$locale")"
+done
 # SwiftPM resources (tokenizers, privacy manifests) must travel with the executable.
 for resource in "$bin_dir/"*.bundle; do
     [[ ! -d "$resource" ]] || ditto "$resource" "$app_path/Contents/Resources/$(basename "$resource")"
@@ -29,5 +32,6 @@ for checkout in "${AXIS_SWIFT_SCRATCH_PATH:-$repo_root/.build}/checkouts/"*; do
 done
 mkdir -p "$app_path/Contents/Resources/Tools"
 swiftc -O -target arm64-apple-macosx15.0 "$repo_root/Sources/AxisCopilot/UpdateSupport.swift" "$repo_root/scripts/UpdateHelper.swift" -o "$app_path/Contents/Resources/Tools/AxisUpdater"
+bash "$repo_root/scripts/setup-intelligence.sh" "$app_path"
 bash "$repo_root/scripts/sign-app.sh" "$app_path"
 printf '%s\n' "$app_path"

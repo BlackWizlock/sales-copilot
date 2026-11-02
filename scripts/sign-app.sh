@@ -29,5 +29,10 @@ sign() {
 for executable in "$app/Contents/Resources/Tools/AxisUpdater" "$app/Contents/Resources/Tools/whisper-cli"; do
     if [[ -f "$executable" ]]; then sign "$executable"; fi
 done
+if [[ -d "$app/Contents/Resources/Tools/Ollama" ]]; then
+    while IFS= read -r -d '' target; do
+        if /usr/bin/file -b "$target" | /usr/bin/grep -q 'Mach-O'; then sign "$target"; fi
+    done < <(/usr/bin/find "$app/Contents/Resources/Tools/Ollama" -type f -print0)
+fi
 sign "$app"
 /usr/bin/codesign --verify --deep --strict "$app"

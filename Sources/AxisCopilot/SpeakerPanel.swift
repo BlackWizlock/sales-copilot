@@ -12,10 +12,10 @@ struct SpeakerPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
-                Text("Участники").font(.headline)
+                Text(L10n.string("Участники")).font(.headline)
                 Spacer()
                 if model.analyzingSpeakers { ProgressView().controlSize(.small) }
-                else { Button("Разделить голоса") { model.analyzeSpeakers() }.disabled(model.locked || model.current?.chunks.isEmpty != false) }
+                else { Button(L10n.string("Разделить голоса")) { model.analyzeSpeakers() }.disabled(model.locked || model.current?.chunks.isEmpty != false) }
             }
             Text(model.speakerStatus).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
             if let speakers = model.current?.speakers, !speakers.isEmpty {
@@ -31,13 +31,13 @@ struct SpeakerPanel: View {
         }
         .sheet(isPresented: Binding(get: { viewState.editing != nil }, set: { if !$0 { viewState.editing = nil } })) {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Имя участника").font(.title2)
-                Text("Имя применяется к этому голосу только в выбранной встрече. Конкретную фразу можно переназначить через её подпись.").foregroundStyle(.secondary)
-                TextField("Имя", text: $viewState.name).textFieldStyle(.roundedBorder)
+                Text(L10n.string("Имя участника")).font(.title2)
+                Text(L10n.string("Имя применяется к этому голосу только в выбранной встрече. Конкретную фразу можно переназначить через её подпись.")).foregroundStyle(.secondary)
+                TextField(L10n.string("Имя"), text: $viewState.name).textFieldStyle(.roundedBorder)
                 HStack {
-                    Button("Отмена") { viewState.editing = nil }.keyboardShortcut(.cancelAction)
+                    Button(L10n.string("Отмена")) { viewState.editing = nil }.keyboardShortcut(.cancelAction)
                     Spacer()
-                    Button("Сохранить") { if let id = viewState.editing { model.renameSpeaker(id, name: viewState.name) }; viewState.editing = nil }.keyboardShortcut(.defaultAction)
+                    Button(L10n.string("Сохранить")) { if let id = viewState.editing { model.renameSpeaker(id, name: viewState.name) }; viewState.editing = nil }.keyboardShortcut(.defaultAction)
                         .disabled(viewState.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }.padding(24).frame(width: 440)
