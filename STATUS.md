@@ -9,14 +9,14 @@ updated: 2026-11-02
 - Owner/Agent: Codex
 - Source: user approval 2026-11-02, written design and initial commit approved, implementation requested
 - Scope: native macOS app, microphone/app audio capture, WAV and M4A, local Russian transcription
-- Handoff: owned
+- Handoff: ready_for_review
 - Branch: codex/recording-prototype
-- Status: implementation built, 10 core checks and synthetic real-whisper pipeline passed; live QuickTime + microphone capture, in-recording transcription, M4A and restart history verified; portable Apple Silicon bundle with embedded model/backend passed synthetic inference; brand header and product credits added
+- Status: implementation commit 83ba8f8 passed ci-local.sh in a fresh clean clone: 10 core checks, release build, diagnostics, Russian two-source transcription and M4A export; live QuickTime + microphone capture and restart history verified earlier; portable Apple Silicon bundle and fixed Axis branding verified
 - Review: independent reviewer confirmed 4 Important failure-path findings fixed; no new Critical/Important findings. Successful chunks now synchronously drained before export on stop error.
 - Design: docs/superpowers/specs/2026-11-02-sales-copilot-design.md
 - Plan: docs/superpowers/plans/2026-11-02-recording-transcription.md
 - Validation: docs/TESTING.md
-- Next: commit, clean-checkout validation and publish for cross-review; owner explicitly approved proceeding despite feature Jev escalation on 2026-11-02; no merge without other lead review
+- Next: cross-review by other lead and live Zoom/Telemost acceptance; owner explicitly approved proceeding despite feature Jev escalation on 2026-11-02; no merge without other lead review
 
 ## Сделано за неделю
 
@@ -43,7 +43,7 @@ updated: 2026-11-02
 ## Review Gates
 
 1. Initial documentation Jev escalation safe_to_apply=0.38, correctness confidence=0.15 was explicitly overridden by user approval of description and initial commit. Initial commit 171b734 pushed.
-2. Product feature Jev gate escalated: safe_to_apply=0.23, composite=0.6628, low confidence on test_gap, no concrete defect specified. Both verification claims (10 core checks and bundled synthetic inference) confirmed with confidence=1.0. Owner explicitly approved commit and push despite this escalation on 2026-11-02 (reply to the specific exception request: «да, поехали»). This is separate from the initial documentation exception. A fresh export of staged source passed ci-local.sh; committed clean-checkout validation follows the implementation commit.
+2. Product feature Jev gate escalated: safe_to_apply=0.23, composite=0.6628, low confidence on test_gap, no concrete defect specified. Both verification claims (10 core checks and bundled synthetic inference) confirmed with confidence=1.0. Owner explicitly approved commit and push despite this escalation on 2026-11-02 (reply to the specific exception request: «да, поехали»). This is separate from the initial documentation exception. Implementation commit 83ba8f8 passed ci-local.sh in a fresh clean clone.
 3. Cross-review from other lead required before merge.
 
 ## Known Risks
