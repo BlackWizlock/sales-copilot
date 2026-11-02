@@ -11,6 +11,7 @@ updated: 2026-11-02
 - Scope: native macOS app, microphone/app audio capture, WAV and M4A, local Russian transcription
 - Handoff: ready_for_review
 - Branch: codex/recording-prototype
+- Publication: implementation 83ba8f8 and verification 4dcf546 pushed; PR https://github.com/BlackWizlock/sales-copilot/pull/1 open for review
 - Status: implementation commit 83ba8f8 passed ci-local.sh in a fresh clean clone: 10 core checks, release build, diagnostics, Russian two-source transcription and M4A export; live QuickTime + microphone capture and restart history verified earlier; portable Apple Silicon bundle and fixed Axis branding verified
 - Review: independent reviewer confirmed 4 Important failure-path findings fixed; no new Critical/Important findings. Successful chunks now synchronously drained before export on stop error.
 - Design: docs/superpowers/specs/2026-11-02-sales-copilot-design.md

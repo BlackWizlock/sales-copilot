@@ -61,7 +61,7 @@ Interfaces: Main-actor model owns recording state, session manifest, pending dis
 - [x] Inspect native app in UI; exercise start/stop and permissions if available, report any permission step requiring owner action.
 - [x] Fresh branch reviewer, address important findings, update standards/STATUS, run Jev gate.
 - [x] Add fixed brand header and product credits; package portable Apple Silicon app by owner request.
-- [ ] Owner decision on Jev escalation, commit, committed clean-checkout verification and push feature branch.
+- [x] Owner decision on Jev escalation, commit, committed clean-checkout verification and push feature branch.
 
 ## Rulings and ledger
 
