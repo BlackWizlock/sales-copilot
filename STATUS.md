@@ -1,46 +1,56 @@
 # STATUS
 
-## Active
+updated: 2026-11-02
 
-### SC-001 Создание проекта и описание прототипа
-
-- Owner/Agent: Codex
-- Source: user request 2026-11-02; confirmed project parameters
-- Scope: project scaffold, repository, HQ registration, design document
-- Handoff: ready_for_review
-- Status: приватный репозиторий создан; локальный каркас и описание готовы к согласованию; первый коммит остановлен Jev
-- Design: docs/superpowers/specs/2026-11-02-sales-copilot-design.md
-- Review: independent builder check found nothing important left; first slice A clearly separated
-- Validation: frontmatter_validate OK 74 projects; resolver identifies sales-copilot with 3 required standards; instruction_sync checked=1 conflicts=0; gitleaks staged found no leaks
-- Pending: approve design; resolve Jev escalation before commit; publish initial structure; attach HQ submodule and complete registration in root CLAUDE.md
+## Сейчас в работе
 
 ### SC-002 Локальная запись и транскрипция
 
 - Owner/Agent: Codex
-- Source: user request 2026-11-02
-- Scope: macOS app, audio capture, recording, Russian transcription
+- Source: user approval 2026-11-02, written design and initial commit approved, implementation requested
+- Scope: native macOS app, microphone/app audio capture, WAV and M4A, local Russian transcription
 - Handoff: owned
-- Status: pending SC-001 and design approval; product code has not started
+- Branch: codex/recording-prototype
+- Status: implementation built, 10 core checks and synthetic real-whisper pipeline passed; live QuickTime + microphone capture, in-recording transcription, M4A and restart history verified; portable Apple Silicon bundle with embedded model/backend passed synthetic inference; brand header and product credits added
+- Review: independent reviewer confirmed 4 Important failure-path findings fixed; no new Critical/Important findings. Successful chunks now synchronously drained before export on stop error.
+- Design: docs/superpowers/specs/2026-11-02-sales-copilot-design.md
+- Plan: docs/superpowers/plans/2026-11-02-recording-transcription.md
+- Validation: docs/TESTING.md
+- Next: commit, clean-checkout validation and publish for cross-review; owner explicitly approved proceeding despite feature Jev escalation on 2026-11-02; no merge without other lead review
+
+## Сделано за неделю
+
+### SC-001 Создание проекта и описание прототипа
+
+- Owner/Agent: Codex
+- Source: user request and explicit approval 2026-11-02
+- Scope: approved project scaffold, private repository, design
+- Handoff: ready_for_review
+- Status: initial documentation approved by user and published as main commit 171b734
+- Validation: initial gitleaks clear; instruction_sync checked=1 conflicts=0; frontmatter resolver sees sales-copilot
+- Pending: HQ gitlink/submodule registration remains separate metadata tail; generated HQ registry already identifies project
+
+## Очередь
 
 ### SC-003 Автоматический суфлёр и интеграции
 
 - Owner/Agent: Codex
 - Source: user request 2026-11-02
-- Scope: proposal grounding, live suggestions, Bitrix24 calendar/deal, MCP, optional OpenRouter, CRM recording export
+- Scope: proposal grounding, automatic suggestions, Bitrix24 calendar/deal, MCP, optional OpenRouter, CRM recording export
 - Handoff: owned
-- Status: pending SC-002
+- Status: pending SC-002 live acceptance; not implemented
 
 ## Review Gates
 
-1. Initial staged documentation review via jev_review: safe_to_apply=0.38, correctness confidence=0.15, action=escalate. No commit or push performed. No specific defect was returned. User decision required by canonical Jev usage; do not retry the same patch to seek approval.
-2. Full product design requires approval before implementation under brainstorming protocol. User confirmed project parameters, not this written design.
+1. Initial documentation Jev escalation safe_to_apply=0.38, correctness confidence=0.15 was explicitly overridden by user approval of description and initial commit. Initial commit 171b734 pushed.
+2. Product feature Jev gate escalated: safe_to_apply=0.23, composite=0.6628, low confidence on test_gap, no concrete defect specified. Both verification claims (10 core checks and bundled synthetic inference) confirmed with confidence=1.0. Owner explicitly approved commit and push despite this escalation on 2026-11-02 (reply to the specific exception request: «да, поехали»). This is separate from the initial documentation exception. A fresh export of staged source passed ci-local.sh; committed clean-checkout validation follows the implementation commit.
+3. Cross-review from other lead required before merge.
 
 ## Known Risks
 
-1. Захват двух источников, разрешения macOS, работа с Granola и задержка моделей не проверены.
-2. Доступ приложения и подписка REST/Маркетплейс на портале Битрикс24 не проверены; инструмент bitrix24-axis отсутствует в текущем каталоге сессии.
-3. Нет подтверждения, что загруженная внешняя встреча автоматически запускает встроенный разбор Битрикс24.
-4. Полного Xcode нет; Command Line Tools и SDK есть. Пригодность для сборки .app предстоит проверить.
-5. Замена Granola возможна только после проверки основных сценариев; миграция старых встреч пока не включена.
-6. Удалённый репозиторий пока пуст; локальный проект ещё не присоединён как подмодуль. Штабной реестр пересобран и видит проект; регистрация не считается завершённой.
-7. Shell-алиасы не добавлены; создание окружения и зависимостей отложено до реализации.
+1. Zoom, Telemost, Granola coexistence, headphones and long meeting still require live acceptance.
+2. Bitrix24 REST availability, CRM attachment and native analysis not verified; no Bitrix integration in this slice.
+3. Local ad-hoc signing may require permission renewal after rebuild. No notarization or automatic updates.
+4. Small local model can misrecognize names/numbers; 8-second chunks can split phrases. No measured live p95.
+5. Audio not yet flushed from RAM can be lost in a crash. Persisted WAVs remain even if transcription/export fails.
+6. MCP and OpenRouter are absent; confidential materials must not be sent to cloud providers.
