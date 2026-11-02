@@ -1,0 +1,17 @@
+required:
+  - architecture.md
+  - data-boundaries.md
+  - verification.md
+triggers:
+  звук: architecture.md
+  транскрип: architecture.md
+  macos: architecture.md
+  mcp: data-boundaries.md
+  openrouter: data-boundaries.md
+  битрикс: [architecture.md, data-boundaries.md]
+  провер: verification.md
+  test: verification.md
+paths:
+  Sources/**: [architecture.md, data-boundaries.md]
+  Tests/**: verification.md
+  docs/**: architecture.md

@@ -1,0 +1,42 @@
+# Local materials and results
+_input/*
+!_input/README.md
+_output/*
+!_output/README.md
+_materials/*
+!_materials/README.md
+_vault/inbox/*
+!_vault/inbox/README.md
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+.mcp.json
+*.key
+*.pem
+
+# Agent worktrees and build output
+.worktrees/
+.agents/
+.build/
+.swiftpm/
+dist/
+node_modules/
+.venv/
+__pycache__/
+.DS_Store
+
+# Meeting data and model weights
+runtime/
+recordings/
+models/
+*.m4a
+*.wav
+*.mp3
+*.caf
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.safetensors
+*.mlmodelc/
