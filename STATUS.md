@@ -71,10 +71,11 @@ updated: 2026-11-02
 - Owner/Agent: Codex
 - Source: owner approved meeting mockup and design with «да ок», 2026-11-02
 - Scope: player controls, seven playback rates, phrase following/search, local postmeeting voice groups and manual names, persistent signing, signed local alpha updates, Apple Silicon bundle
-- Handoff: owned
+- Handoff: ready_for_review
+- Publication: reviewed candidate 5a3e7e1 pushed to private codex/recording-prototype; PR https://github.com/BlackWizlock/sales-copilot/pull/1 remains open, not merged
 - Validation: full ci-local passed in isolated candidate checkout; real native muted playback passed all seven rates; bundled three-voice 60.86-second fixture produced three recurring groups; updater rejection and rollback fixtures passed
 - Native acceptance: build 5 installed through signed updater from build 4; final layout, phrase seek/highlight, search, speaker rename and manual phrase assignment verified on synthetic history; final isolated ci-local and employee bundle PASS
 - Permissions: owner refreshed bootstrap permission for build 4; after updater installed build 5, fresh system-audio discovery populated application picker without another permission change. This proves that transition for system-audio discovery, not microphone capture retention or all future macOS releases
 - Update race: CUA automatically reopened app during helper replacement, briefly leaving old/new idle processes; old instance quit through UI. Single-instance protection remains a hardening item; no capture or client meeting edited
 - Gate: player/speaker Jev safe_to_apply 0.28 and updater 0.23 escalated, no contradicted claims; stronger independent reasoner reviewed final source/logs and supports private-branch publication and owner-review alpha, no blocking defect. Owner explicitly authorized commit and push despite these scores on 2026-11-02. Exception applies to the reviewed candidate and private working branch; no merge or employee distribution clearance
-- Limits: synthetic voices do not establish meeting accuracy or reliable overlap detection; same signing requirement does not establish retained TCC permission
+- Limits: synthetic voices do not establish meeting accuracy or reliable overlap detection; same signing requirement does not establish retained TCC permission; physical echo/double-talk, real-meeting speakers and installation on a second Mac still require acceptance
