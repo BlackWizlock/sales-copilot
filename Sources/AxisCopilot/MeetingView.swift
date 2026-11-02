@@ -1,7 +1,12 @@
 import SwiftUI
 import CopilotCore
 
+@MainActor private final class MeetingViewState: ObservableObject {
+    @Published var historyQuery: String = ""
+}
+
 struct MeetingView: View {
+    @StateObject private var viewState = MeetingViewState()
     @ObservedObject var model: MeetingModel
     var body: some View {
         VStack(spacing: 0) {
@@ -18,9 +23,11 @@ struct MeetingView: View {
                 Text("БИБЛИОТЕКА").font(.caption.weight(.semibold)).foregroundStyle(AxisBrand.teal)
                 Text("Встречи").font(.largeTitle.weight(.semibold))
                 Text("Запись и текст хранятся на этом Mac.").font(.callout).foregroundStyle(.secondary)
+                Button("Новая встреча", systemImage: "plus") { model.newMeeting() }.disabled(model.locked)
+                TextField("Найти встречу", text: $viewState.historyQuery).textFieldStyle(.roundedBorder)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
-                        ForEach(model.sessions) { session in
+                        ForEach(model.sessions.filter { viewState.historyQuery.isEmpty || $0.title.localizedCaseInsensitiveContains(viewState.historyQuery) }) { session in
                             Button { model.select(session.id) } label: {
                                 VStack(alignment: .leading, spacing: 5) {
                                     Text(session.title).font(.headline).lineLimit(1)
@@ -35,17 +42,19 @@ struct MeetingView: View {
                 Spacer(minLength: 0)
                 Button("Настройки распознавания", systemImage: "slider.horizontal.3") { model.showSettings = true }
                 Button("Открыть папку записей", systemImage: "folder") { model.revealFolder() }
+                UpdateStatusView(updater: model.updater, busy: model.locked)
             }.padding(20).frame(minWidth: 240, idealWidth: 280, maxWidth: 340)
                 .background(Color(nsColor: .windowBackgroundColor))
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
                     VStack(alignment: .leading, spacing: 5) {
-                        Text("Запись встречи").font(.largeTitle.weight(.semibold))
+                        Text(model.current?.title ?? "Новая встреча").font(.largeTitle.weight(.semibold)).lineLimit(1)
                         Text("Русская транскрипция · локальная модель · прототип A").foregroundStyle(.secondary)
                     }
                     Spacer()
                     Text(model.elapsed).font(.system(.title, design: .monospaced)).monospacedDigit()
                 }
+                if model.current == nil || model.phase != .idle {
                 HStack {
                     TextField("Название встречи", text: $model.title).textFieldStyle(.roundedBorder).disabled(model.locked)
                     Picker("Источник", selection: $model.selectedPID) {
@@ -71,11 +80,19 @@ struct MeetingView: View {
                     if model.phase == .starting || model.phase == .stopping || model.processing || model.exporting { ProgressView().controlSize(.small) }
                     Spacer()
                     if model.current != nil {
-                        Button("Слушать", systemImage: "play.fill") { model.play() }.disabled(model.phase != .idle)
                         Button("Повторить распознавание") { model.retryTranscription() }.disabled(model.locked || (model.failed == 0 && model.pending == 0))
                     }
                 }
-                Text(model.status + (model.pending > 0 ? " Осталось фрагментов: \(model.pending)." : "")).font(.callout).foregroundStyle(.secondary)
+                }
+                if model.current == nil || model.phase != .idle || model.processing || model.exporting || model.failed > 0 || model.pending > 0 {
+                    HStack {
+                        Text(model.status + (model.pending > 0 ? " Осталось фрагментов: \(model.pending)." : "")).font(.callout).foregroundStyle(.secondary)
+                        if model.current != nil && model.phase == .idle && (model.failed > 0 || model.pending > 0) {
+                            Spacer()
+                            Button("Повторить распознавание") { model.retryTranscription() }.disabled(model.locked)
+                        }
+                    }
+                }
                 if let error = model.error {
                     HStack(alignment: .top) {
                         Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
@@ -85,31 +102,12 @@ struct MeetingView: View {
                     }.padding(12).background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
                 }
                 Divider()
-                HStack { Text("Транскрипция").font(.title2.weight(.medium)); Spacer(); Text("Нажмите время, чтобы прослушать").font(.caption).foregroundStyle(.secondary) }
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 18) {
-                            if model.current?.transcript.isEmpty != false {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Здесь появится текст разговора").font(.headline)
-                                    Text("Первые фрагменты обрабатываются после накопления 8 секунд звука. После остановки распознавание продолжится.").foregroundStyle(.secondary)
-                                }.padding(.vertical, 28)
-                            }
-                            ForEach(model.current?.transcript ?? []) { line in
-                                HStack(alignment: .top, spacing: 14) {
-                                    Button(time(line.start)) { model.play(line) }.buttonStyle(.plain).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary).frame(width: 48)
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(line.source.title).font(.caption.weight(.semibold)).foregroundStyle(line.source == .microphone ? Color.accentColor : .secondary)
-                                        Text(line.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                }.id(line.id)
-                            }
-                        }.padding(.vertical, 8)
-                    }.onChange(of: model.current?.transcript.count) { _, _ in
-                        if model.phase == .recording, let id = model.current?.transcript.last?.id { proxy.scrollTo(id, anchor: .bottom) }
-                    }
+                TranscriptPanel(model: model, playback: model.playback).frame(minHeight: 140, maxHeight: .infinity)
+                if model.current != nil {
+                    PlaybackView(playback: model.playback, busy: model.phase != .idle || model.exporting, loading: model.preparingPlayback) { model.play() }
                 }
-                Text("КП, суфлёр и Битрикс24 появятся в следующих срезах. Аудио в облако не отправляется.").font(.caption).foregroundStyle(.secondary)
+                if model.current != nil { SpeakerPanel(model: model) }
+                Text("Голоса разделяются после встречи. Имена назначаются вручную. Аудио и текст остаются на Mac.").font(.caption).foregroundStyle(.secondary)
             }.padding(28).frame(minWidth: 700, minHeight: 620).background(Color(nsColor: .textBackgroundColor))
         }
     }
@@ -118,7 +116,7 @@ struct MeetingView: View {
         let receiving = ProcessInfo.processInfo.systemUptime - (model.lastSamples[source] ?? 0) < 2
         return VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text(source == .microphone ? "Микрофон · я" : "Звук встречи · собеседники").font(.callout.weight(.medium))
+                Text(source == .microphone ? "Микрофон · эхоподавление" : "Звук встречи").font(.callout.weight(.medium))
                 Spacer()
                 Text(model.phase == .recording ? (receiving ? "Поток есть" : "Нет потока") : "Ожидание").font(.caption).foregroundStyle(receiving && model.phase == .recording ? Color.green : .secondary)
             }

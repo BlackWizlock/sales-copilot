@@ -34,7 +34,6 @@ struct AxisProductCredits: View {
             Link("Консалтинг", destination: URL(string: "https://axisconsult.ru")!)
             Link("Платформа", destination: URL(string: "https://axisplatform.ru")!)
             Link("Обучение", destination: URL(string: "https://edu.axisconsult.ru")!)
-            Link("Модель", destination: URL(string: "https://model.axisconsult.ru")!)
         }
         .font(.caption).foregroundStyle(.white).tint(.white)
         .padding(.horizontal, 24).padding(.vertical, 12)

@@ -4,7 +4,14 @@ import CopilotCore
 
 @MainActor final class AppLifecycle: NSObject, NSApplicationDelegate, NSWindowDelegate {
     weak var model: MeetingModel?
+    func installApplicationIcon() {
+        if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+           let icon = NSImage(contentsOf: url) {
+            NSApp.applicationIconImage = icon
+        }
+    }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if model?.updater.allowsTermination == true { return .terminateNow }
         guard let model, model.locked else { return .terminateNow }
         showCloseAlert(model)
         return .terminateCancel
@@ -50,16 +57,44 @@ struct AxisCopilotApp: App {
                 .background(WindowDelegateInstaller(delegate: lifecycle).frame(width: 0, height: 0))
                 .onAppear {
                     lifecycle.model = model
+                    lifecycle.installApplicationIcon()
                     NSApp.setActivationPolicy(.regular)
                     NSApp.activate(ignoringOtherApps: true)
                 }
         }.defaultSize(width: 1100, height: 760)
+        .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Установить обновление…") { model.updater.chooseUpdate(currentlyBusy: model.locked) }
+                    .disabled(model.locked)
+            }
+        }
     }
 }
 
 @main enum EntryPoint {
     @MainActor static func main() async {
         let arguments = CommandLine.arguments
+        if arguments.contains("--verify-speakers") {
+            do { try await SpeakerVerification.run() }
+            catch { fputs("\(error.localizedDescription)\n", stderr); exit(1) }
+            return
+        }
+        if arguments.contains("--verify-playback") {
+            do { try await PlaybackVerification.run() }
+            catch { fputs("\(error.localizedDescription)\n", stderr); exit(1) }
+            return
+        }
+        if arguments.contains("--verify-voice-processing") {
+            do {
+                let engine = try VoiceMicrophone.makeEngine()
+                guard engine.inputNode.isVoiceProcessingEnabled, engine.outputNode.isVoiceProcessingEnabled,
+                      !engine.inputNode.isVoiceProcessingAGCEnabled else {
+                    throw CopilotError.message("FAIL: microphone lacks echo processing or enables automatic gain")
+                }
+                print("PASS: native voice processing enabled on input/output; automatic gain disabled; no capture started")
+            } catch { fputs("\(error.localizedDescription)\n", stderr); exit(1) }
+            return
+        }
         if arguments.contains("--diagnostics") {
             do {
                 try LocalTranscriber(executable: LocalTranscriber.defaultExecutable, model: LocalTranscriber.defaultModel).validate()

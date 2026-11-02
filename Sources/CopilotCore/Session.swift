@@ -2,7 +2,7 @@ import Foundation
 
 public enum AudioSource: String, Codable, CaseIterable {
     case microphone, meeting
-    public var title: String { self == .microphone ? "Я" : "Собеседники" }
+    public var title: String { self == .microphone ? "Микрофон" : "Звук встречи" }
 }
 public enum SessionState: String, Codable { case recording, processing, completed, interrupted }
 public enum ChunkState: String, Codable { case pending, completed, failed }
@@ -42,6 +42,9 @@ public struct MeetingSession: Codable, Identifiable {
     public var chunks: [AudioChunk] = []
     public var transcript: [TranscriptLine] = []
     public var issues: [String] = []
+    public var speakers: [SpeakerProfile]?
+    public var speakerTurns: [SpeakerTurn]?
+    public var speakerOverrides: [SpeakerOverride]?
     public init(title: String) { self.title = title }
 }
 public enum CopilotError: LocalizedError {

@@ -21,6 +21,7 @@ _vault/inbox/*
 .agents/
 .build/
 .swiftpm/
+.superpowers/
 dist/
 node_modules/
 .venv/

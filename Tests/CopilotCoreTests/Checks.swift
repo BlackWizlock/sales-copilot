@@ -15,6 +15,7 @@ func expectThrows<T>(_ expression: @autoclosure () throws -> T, file: StaticStri
 }
 @main struct CoreChecks {
     static func main() throws {
+        PlaybackTests().run()
         try SessionTests().testPCMFileHasCorrectLengthClippingAndRoundTrip()
         try SessionTests().testManifestRoundTripAndInterruptedRecovery()
         try SessionTests().testCannotEscapeSessionDirectory()
@@ -25,6 +26,7 @@ func expectThrows<T>(_ expression: @autoclosure () throws -> T, file: StaticStri
         try SessionTests().testBrokenMeetingDoesNotHideHistoryAndAudioCanBeRecovered()
         try WhisperTests().testOffsetsAreRelativeToMeetingAndSilenceIsFiltered()
         WhisperTests().testMalformedOutputFailsInsteadOfEmptySuccess()
+        try SpeakerTests().run()
         print("PASS: 10 core checks")
     }
 }

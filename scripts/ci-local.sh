@@ -5,4 +5,7 @@ cd "$repo_root"
 timeout 180 swift run --build-system native CoreChecks
 bash scripts/build-app.sh
 "$repo_root/_output/AxisCopilot.app/Contents/MacOS/AxisCopilot" --diagnostics
+"$repo_root/_output/AxisCopilot.app/Contents/MacOS/AxisCopilot" --verify-voice-processing
+"$repo_root/_output/AxisCopilot.app/Contents/MacOS/AxisCopilot" --verify-playback
+bash "$repo_root/scripts/check-updates.sh"
 bash "$repo_root/scripts/verify-synthetic.sh"

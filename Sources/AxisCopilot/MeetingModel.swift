@@ -28,9 +28,14 @@ enum CapturePhase { case idle, starting, recording, stopping }
     private var capture: AudioCapture?
     private var worker: Task<Void, Never>?
     private var timer: Timer?
-    private var player: AVAudioPlayer?
+    let playback = PlaybackController()
+    let updater = AppUpdater()
+    @Published var preparingPlayback = false
+    @Published var analyzingSpeakers = false
+    @Published var speakerStatus = "Голоса ещё не разделены"
+    private var speakerAttempts = Set<UUID>()
 
-    var locked: Bool { phase != .idle || processing || exporting }
+    var locked: Bool { phase != .idle || processing || exporting || preparingPlayback || analyzingSpeakers || updater.isUpdating }
     var pending: Int { current?.chunks.filter { $0.state == .pending }.count ?? 0 }
     var failed: Int { current?.chunks.filter { $0.state == .failed }.count ?? 0 }
     var elapsed: String {
@@ -74,6 +79,7 @@ enum CapturePhase { case idle, starting, recording, stopping }
 
     func start() async {
         guard !locked, let store else { return }
+        playback.stop()
         phase = .starting; startupFailure = nil; error = nil; levels = [:]; lastSamples = [:]
         saveSettings()
         do {
@@ -187,6 +193,7 @@ enum CapturePhase { case idle, starting, recording, stopping }
         }
         if current?.state == .interrupted { status = "Встреча прервана. Сохранённые фрагменты доступны."; return }
         status = failed > 0 ? "Аудио сохранено. Часть фрагментов требует повторного распознавания." : "Встреча сохранена локально"
+        if let current, current.state == .completed, current.speakerTurns == nil, !speakerAttempts.contains(current.id), !analyzingSpeakers { analyzeSpeakers() }
     }
 
     func retryTranscription() {
@@ -197,9 +204,45 @@ enum CapturePhase { case idle, starting, recording, stopping }
 
     func select(_ id: UUID) {
         guard !locked else { return }
-        player?.stop()
+        playback.stop()
         current = sessions.first { $0.id == id }
+        if let current { title = current.title }
+        speakerStatus = current?.speakerTurns == nil ? "Голоса ещё не разделены" : "Голоса разделены локально"
         levels = [:]; lastSamples = [:]; error = nil
+    }
+
+    func newMeeting() {
+        guard !locked else { return }
+        playback.stop(); current = nil; title = "Новая встреча"; levels = [:]; lastSamples = [:]; error = nil
+        status = "Выберите приложение встречи и нажмите «Начать»"
+    }
+
+    func analyzeSpeakers() {
+        guard !locked, let current, let store else { return }
+        speakerAttempts.insert(current.id)
+        analyzingSpeakers = true; speakerStatus = "Разделяем голоса на этом Mac"
+        Task {
+            defer { analyzingSpeakers = false }
+            do {
+                let turns = try await LocalDiarizer().process(session: current, store: store)
+                guard self.current?.id == current.id else { return }
+                self.current?.applySpeakerTurns(turns)
+                speakerStatus = turns.isEmpty ? "Речь для разделения голосов не найдена" : "Голоса разделены локально. Проверьте назначения."
+                persist()
+            } catch { speakerStatus = "Голоса не разделены: \(error.localizedDescription)" }
+        }
+    }
+
+    func renameSpeaker(_ id: String, name: String) {
+        guard !analyzingSpeakers, let index = current?.speakers?.firstIndex(where: { $0.id == id }) else { return }
+        let value = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        current?.speakers?[index].name = String(value.prefix(120)); persist()
+    }
+
+    func assignSpeaker(_ id: String?, to phrase: UUID) {
+        guard !analyzingSpeakers else { return }
+        current?.setSpeakerOverride(phraseID: phrase, speakerID: id); persist()
     }
 
     private func persist() {
@@ -217,18 +260,27 @@ enum CapturePhase { case idle, starting, recording, stopping }
     }
 
     func play(_ line: TranscriptLine? = nil) {
-        guard let current, let store else { return }
-        do {
-            let archive = try store.fileURL(current.id, filename: "meeting.m4a")
-            if FileManager.default.fileExists(atPath: archive.path) {
-                player = try AVAudioPlayer(contentsOf: archive)
-                player?.currentTime = line?.start ?? 0
-            } else if let chunk = current.chunks.first(where: { line == nil || $0.id == line?.chunkID }) {
-                player = try AVAudioPlayer(contentsOf: store.fileURL(current.id, filename: chunk.filename))
-                player?.currentTime = max(0, (line?.start ?? chunk.start) - chunk.start)
-            }
-            player?.play()
-        } catch { self.error = "Не удалось воспроизвести: \(error.localizedDescription)" }
+        guard phase == .idle, !preparingPlayback, !exporting, let current, let store else { return }
+        if playback.isLoaded {
+            if let line { playback.seek(to: line.start); playback.play() }
+            else { playback.toggle() }
+            return
+        }
+        preparingPlayback = true
+        Task {
+            defer { preparingPlayback = false }
+            do {
+                let archive = try store.fileURL(current.id, filename: "meeting.m4a")
+                if !FileManager.default.fileExists(atPath: archive.path) {
+                    guard !current.chunks.isEmpty else { throw CopilotError.message("У этой встречи нет аудиозаписи") }
+                    try await RecordingExport.export(session: current, store: store)
+                }
+                guard self.current?.id == current.id, phase == .idle else { return }
+                try playback.load(url: archive)
+                if let line { playback.seek(to: line.start) }
+                playback.play()
+            } catch { self.error = "Не удалось воспроизвести: \(error.localizedDescription). Исходные фрагменты сохранены." }
+        }
     }
 
     func exportRecording() async {
