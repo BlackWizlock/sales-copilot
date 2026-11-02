@@ -18,7 +18,7 @@ updated: 2026-11-02
 | 02 | Устранение ошибки старта -10875 | Исправлено; клиентские частоты совпадают; реальный старт9 прошёл | Регрессия при смене устройства |
 | 03 | Эхоподавление новой записи | VoiceProcessingIO, защита от воспроизведения, раздельные источники | Живой разговор через динамики и одновременная речь |
 | 04 | Усиленная очистка старой записи PR | Создана отдельная meeting.echo-reduced.m4a, оригинал сохранён;10 синтетических проверок | Прослушивание и сравнение; выбор версии добавлен в плеер11 |
-| 05 | Локальная русская транскрипция и восстановление | Реализовано; CoreChecks и синтетическое реальное ASR/M4A проходили | Финальный worktree CI11 прошёл; чистый checkout ожидает коммита |
+| 05 | Локальная русская транскрипция и восстановление | Реализовано; CoreChecks и синтетическое реальное ASR/M4A проходили | Чистый checkout8788d97 прошёл полный CI11 с локальным SwiftPM mirror FluidAudio |
 | 06 | Удаление дублей слов и фраз | Обратимое представление без удаления исходников, проверки ядра | Оценка на реальном разговоре |
 | 07 | Голоса, ручные имена, привязка фраз | Локальная итоговая группировка и ручные поправки; синтетические3 голоса | Точность трёх участников реальной встречи |
 | 08 | Плеер и скорость0,5–2×, поиск, фразы | Реализовано; нативно проверены семь скоростей и переходы | Регрессия финальной сборки |
@@ -26,7 +26,7 @@ updated: 2026-11-02
 | 10 | Поддержка любых документов как материалов | Текст/PDF/Office/изображения/OCR; несколько файлов;14 проверок | Финальный CI; схемы и формулы не интерпретируются |
 | 11 | Видимая зона перетаскивания и удаление файлов | Реализовано; нативно проверены два документа и независимое удаление | Регрессия финальной сборки |
 | 12 | Автоматические подсказки по репликам клиента | Реализовано; локальный тест с цитатами материалов прошёл |10 возражений, задержка p50/p95 на живой встрече |
-| 13 | Структурированное резюме с цитатами и правками | Реализовано; production-controller синтетический тест прошёл | Нативный проход финальной сборки |
+| 13 | Структурированное резюме с цитатами и правками | Реализовано; production-controller синтетический тест прошёл; установленная11 показывает ошибку формата на записи PR | Установить причину и повторить нативный проход; приёмка реального резюме открыта |
 | 14 | Отдельный чат по встрече | Реализовано; изоляция, отмена, сохранение истории проверялись | Нативный проход и полный CI |
 | 15 | Удобные настройки, отмена, закрытие, навигация | Отдельное окно с категориями и явным сохранением секретов/путей | Малая ширина, клавиатура, оба языка |
 | 16 | Личный Битрикс24, очистка поля, права, удаление ключа | Реализовано; Keychain CRUD и подключение владельца проверены | Отсутствие автоматических запросов после обновления |
@@ -45,17 +45,17 @@ updated: 2026-11-02
 | 29 | Русские и английские локали | 523 ключа RU/EN,42 шаблона; runtime и нативное English/system прошли | Системные ошибки и updater сохраняют исходный язык |
 | 30 | English name, иконка, фирменные полосы | Axis Copilot; ICNS; ссылки активных продуктов без Model | Нативная регрессия |
 | 31 | Обновления без фоновых запросов пароля | Сборка10 открывала диалог;11 запрещает взаимодействие синхронно, тест чужого ACL прошёл | Нативный запуск11 и настройки без диалога прошли; ключ закрыт до явной разблокировки; Team ID требует Developer ID |
-| 32 | Единый сервер обновлений для всех установок | Архив11 и latest.json подготовлены локально,563856154 байта | Центральная публикация удержана gate; затем HTTPS и обнаружение новой версии |
+| 32 | Единый сервер обновлений для всех установок | HTTPS latest.json опубликован:0.3.1(11), arm64,563856154 байта и SHA256; установленная11 сообщает актуальную совместимую версию | Полный HTTPS GET завершён, размер/SHA256 совпали; второй Mac и обновление с предыдущей версии открыты |
 | 33 | Комплект сотрудника Apple Silicon | Переносимая сборка9 есть, без личных ключей | Комплект11 собран и реальное bundled ASR/M4A прошло; второй Mac не проверен |
 | 34 | Понятный pipeline major/minor/patch, VPS, стек | docs/DEVELOPMENT.md и docs/UPDATES.md реализованы | Проверить инструкцию чистой сборкой и публикацией |
-| 35 | Публичный GitHub, описание, лицензия, сохранность переменных | MIT/README/SECURITY готовы; репозиторий пока private | Финальный аудит исходников/истории, commit/push, публичность |
-| 36 | Полный чистый CI и независимое ревью | Финальный worktree CI11 прошёл;3 P2 исправлены; независимое ревью без блокеров | Чистый checkout после разрешённого коммита; Jev0,21 блокирует публикацию |
+| 35 | Публичный GitHub, описание, лицензия, сохранность переменных | Репозиторий PUBLIC; MIT/README/SECURITY в опубликованной ветке8788d97; gitleaks7 коммитов без утечек | PR1 открыт, main не обновлён; независимая проверка перед слиянием |
+| 36 | Полный чистый CI и независимое ревью | Полный CI11 прошёл в чистом checkout8788d97; FluidAudio через нативный SwiftPM mirror на закреплённой ревизии, исходники/lock без изменений;3 P2 исправлены | Jev0,21 исключение владельца выполнено; перекрёстное ревью требуется перед merge |
 | 37 | Удаление встречи и всех локальных производных | Реализованы подтверждение, удаление локальных производных и отзыв MCP; CoreChecks прошёл | Нативная регрессия; удалённая CRM сохраняется |
 | 38 | MCP фильтры по периоду/сделке и журнал выдачи без текста | Фильтры дат/сделки и ограниченный журнал без текста реализованы; stdio/CoreChecks прошли | Полный CI11; отказ выдачи при недоступном журнале |
 | 39 | Совместная работа с Granola | Не подтверждена | Живой сравнительный запуск и замер нагрузки |
 | 40 | Перекрёстная проверка и слияние | PR1 открыт; слияние не выполнялось | Другой ведущий агент перед merge; текущий scope без merge |
 
-Текущая работа: полный CI11, нативная проверка редактора и тихого Keychain, переносимый комплект, чистый checkout, публикация канала и исходников. Неподтверждённые внешние сценарии не маскируются отметкой «готово». Предыдущие записи ниже сохраняют историю проверок и разрешений.
+Текущая работа: ошибка формата резюме установленной сборки на записи PR и внешняя приёмка. Чистый CI, нативная проверка редактора/тихого Keychain, переносимый комплект, публичная ветка и HTTPS-канал11 с полным скачиванием/хешем проверены. Неподтверждённые внешние сценарии не маскируются отметкой «готово». Предыдущие записи ниже сохраняют историю проверок и разрешений.
 
 ## Сейчас в работе
 
@@ -77,6 +77,16 @@ updated: 2026-11-02
 
 ## Сделано за неделю
 
+### SC-011a Чистая сборка11, публичная ветка и канал обновлений
+
+- Owner/Agent: Codex
+- Source: исключение владельца для Jev0,21; commit8788d97, codex/recording-prototype, PR1
+- Scope: чистая сборка, проверка истории, push, публичность исходников и публикация канала11
+- Handoff: closed
+- Status: полный ci-local прошёл в чистом checkout8788d97; gitleaks7 коммитов без утечек; origin совпадает с HEAD, репозиторий PUBLIC, PR1 OPEN без слияния. HTTPS latest.json и полный ZIP прочитаны, размер563856154 и SHA256 совпали; установленная11 показала последнюю совместимую версию.
+- Verification: live gh и git, .build/ci-clean11-mirror.log, .build/gitleaks-public11.log; Jev verify3/3 verified. Живое резюме, качество встречи, CRM-запись и второй Mac этим не приняты.
+
+
 ### SC-001 Создание проекта и описание прототипа
 
 - Owner/Agent: Codex
@@ -95,12 +105,12 @@ updated: 2026-11-02
 - Source: user request 2026-11-02
 - Scope: proposal grounding, automatic suggestions, Bitrix24 calendar/deal, MCP, optional OpenRouter, CRM recording export
 - Handoff: owned
-- Status: implementation in progress, candidate 0.3.1(11); local inference/summary, proposal/deal retrieval, CRM/calendar, stdio MCP, optional isolated OpenRouter sandbox and ASR catalog implemented; full worktree CI and portable build passed; clean-checkout CI and release pending
+- Status: implementation in progress, candidate 0.3.1(11); local inference/summary, proposal/deal retrieval, CRM/calendar, stdio MCP, optional isolated OpenRouter sandbox and ASR catalog implemented; full worktree CI and portable build passed; clean-checkout CI8788d97 passed; public branch pushed; native summary format error and live acceptance remain open
 - UI correction: build7 installed through signed updater with restored history and Bitrix connection. Build8 adds a visible multi-document drop zone above tabs, per-file removal, client-audio automatic hints in main view and floating HUD, and correct recurring calendar dates. Build8 installed by signed helper. Native sheet import of two synthetic documents, independent removal, and updater sheet open/cancel verified through CUA.
 - CRM: synthetic full deal selection and binding, restoration/new-record inheritance, historical isolation, timeout/reconciliation/no duplicate creation verified; delayed A export/reconcile cannot replace B result. Owner personal connection restored in installed build7; live read-only calendar returned 39 events. Native CUA observation on build8: November2=2 events, November5=1 event; these are manual live observations, not CI assertions. Fixed recurring occurrence dates and stable UI identities; real write has not been tested.
 - Local AI: production-controller synthetic Qwen checks produced structured summary in 4.60 s and cited meeting answer in 1.77 s; switch/fingerprint cancellation and private chat reload verified. Timings exclude ASR and do not establish live meeting latency.
 - Source review: independent source reviews found no confirmed P1/P2; final other-lead review supports owner alpha/private branch, not merge or employee acceptance. Jev safe_to_apply=0.20/composite=0.574 escalated for low confidence and two unsupported claims (zero contradicted); stronger reasoner inspected source/tests/logs and supports private candidate with explicit manual UI evidence.
-- Release: central HTTPS static host configured, no release manifest published yet. Public visibility change still pending secrets/release audit.
+- Release: central HTTPS latest.json publishes0.3.1(11); complete HTTPS archive download and SHA256 verified. Public visibility confirmed after seven-commit gitleaks scan; branch8788d97 pushed, PR1 open and unmerged. Latest publication evidence is in SC-011 below.
 
 ## Review Gates
 
@@ -112,7 +122,7 @@ updated: 2026-11-02
 
 1. Zoom, Telemost, Granola coexistence, headphones and long meeting still require live acceptance.
 2. Bitrix24 personal connection and calendar reading verified; real CRM attachment/write not accepted; native Bitrix meeting analysis remains unconfirmed. Synthetic integration checks are available.
-3. Permanent signing and central update client implemented. Installed build 5→6 retained system-audio discovery without renewed access; actual capture/all future releases not proven. Central host configured, release publication pending; no Apple notarization.
+3. Permanent signing and central update client implemented. Installed build 5→6 retained system-audio discovery without renewed access; actual capture/all future releases not proven. Central host configured; current publication evidence is in SC-011 below; no Apple notarization.
 4. Small local model can misrecognize names/numbers; 8-second chunks can split phrases. No measured live p95.
 5. Audio not yet flushed from RAM can be lost in a crash. Persisted WAVs remain even if transcription/export fails.
 6. MCP is opt-in per meeting and read-only. OpenRouter is a separate synthetic/public sandbox; confidential materials must not be sent there. Full dynamic UI/error translation remains incomplete.
@@ -157,17 +167,20 @@ updated: 2026-11-02
 - Status: implemented in installed9, native day sheet acceptance passed; formatting and explicit description editor candidate10 pending
 
 
-### SC-011 Проверенный локальный кандидат и блокировка публикации
+### SC-011 Проверенный кандидат и публикация ветки11
 
 - Owner/Agent: Codex
 - Source: полная матрица40 требований выше и поручение завершить функции
 - Scope: кандидат0.3.1(11), MCP, редактор календаря, локали, тихий Keychain, удаление, отдельная аудиокопия PR, обновления
-- Handoff: blocked
+- Handoff: ready_for_review
 - Status: установлен11 через прежний подписанный helper, результат success; Previous.app10 сохранён. История на месте. Новые разрешения TCC не запрашивались; сохранение захвата этим не доказано.
+- Publication: commit8788d978d5eabfb5aee1ec35939a0e40674a71b8 опубликован в codex/recording-prototype, PR1 открыт, не слит; репозиторий PUBLIC. MIT/README/SECURITY доступны в ветке; main не обновлён. gitleaks проверил7 коммитов без утечек.
+- Clean checkout: verify-build11 на8788d97, tracked tree чистое, ci-local exit0 (.build/ci-clean11-mirror.log). FluidAudio получен нативным SwiftPM mirror на исходную закреплённую ревизию9830ce835881c0d0d40f90aabfaae3a6da5bebfb; Package.resolved и исходники не менялись.
 - Validation: финальный worktree ci-local exit0; package-employee exit0; установленный MCP initialize/list/ping/EOF exit0;523 RU/EN ключа и42 шаблона; native calendar/editor bold-preview-cancel; English/system переключение; обычный запуск и Bitrix settings без SecurityAgent. Подключение закрыто macOS до явного пользовательского действия; ключ не удалён.
-- Release: локальный AxisCopilot-11-arm64.zip, size563856154, SHA256 f54c3236adc7762828ca7f79f834b7735e4a39f3f96d0c08826610aebc9d022d. Сервер ещё не публиковался.
+- Release: локальный AxisCopilot-11-arm64.zip, size563856154, SHA256 f54c3236adc7762828ca7f79f834b7735e4a39f3f96d0c08826610aebc9d022d. HTTPS latest.json опубликован и прочитан: версия0.3.1, build11, arm64, size/SHA совпадают с локальным архивом; полный HTTPS GET ZIP выполнен ведущим агентом потоком curl | shasum (session32032, exit0), SHA256 совпал. Content-Length HTTPS и серверный размер563856154 совпали с локальным архивом. Установленная11 сообщает актуальную совместимую версию.
 - Publisher fix: реальный запуск выявил неверную передачу необязательного prefix для codesign --extract-certificates; раздельная форма exit1, форма с равенством exit0. Обе проверки сертификата исправлены, полная подготовка ZIP/JSON завершилась exit0.
-- Gate: Jev final delta safe_to_apply0.21, composite0.645, correctness confidence0.07, все3 утверждения проверок verified. Конкретного дефекта не указано. Stronger review поддерживает только обратимую локальную установку11 с копией10, не commit/push или центральную публикацию. Запрошено разовое исключение по обязательному smart-commit; до ответа commit/push/public visibility/central feed не выполняются.
+- Gate: Jev final delta safe_to_apply0.21, composite0.645, correctness confidence0.07, все3 утверждения проверок verified. Конкретного дефекта не указано. Stronger review поддерживает только обратимую локальную установку11 с копией10, не commit/push или центральную публикацию. Владелец явно разрешил исключение для коммита11 при успешном чистом CI перед push/публичностью/каналом. Условие выполнено; commit/push и публичность проверены. Исключение не разрешает слияние или закрытие внешней приёмки.
+- Native issue: установленная11 при генерации резюме записи PR показывает общую ошибку формата данных; причина ещё проверяется, синтетический тест не закрывает этот сценарий.
 - External pending: OAuth-приложение/права/тариф для штатного анализа Битрикс24, зарегистрированный CRM-виджет, конкретная живая тестовая запись, Zoom/Телемост/Granola совместно, качество эха и участников, второй Mac. Без этих проверок весь PRD не закрыт.
 
-Владелец явно разрешил исключение Jev0.21 для коммита сборки11. После коммита обязателен чистый checkout CI; push, публичность и центральный канал только при успехе. Слияние не разрешено. Блокировка на этом исключении снята; внешние сценарии остаются открытыми.
+Владелец явно разрешил исключение Jev0.21 для коммита сборки11. После коммита чистый checkout CI прошёл; push и публичность подтверждены, центральный канал подтверждён HTTPS GET манифеста и полного архива с совпавшим SHA256. Слияние не разрешено. Блокировка на этом исключении снята; внешние сценарии остаются открытыми.
