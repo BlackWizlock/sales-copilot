@@ -1,7 +1,9 @@
 import Foundation
 
 @main struct BitrixKeychainChecks {
-    static func main() throws {
+    @MainActor static func main() async throws {
+        let offMain = try await KeychainAccess.offMain { !Thread.isMainThread }
+        precondition(offMain, "A macOS authentication wait must not block the UI thread")
         // A fresh namespace prevents any read, overwrite or deletion of real application credentials.
         let service = "ru.axisconsult.copilot.synthetic-tests." + UUID().uuidString
         let account = "synthetic-account"

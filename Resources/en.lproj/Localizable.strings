@@ -592,3 +592,37 @@
 "Дело найдено, но итоги или вложения ещё не подтверждены. Повторная отправка отключена; сверьте результат позже." = "The activity exists, but its notes or attachments are not confirmed yet. Resending is disabled; reconcile again later.";
 "Встреча изменилась. Откройте отправку заново." = "The meeting changed. Reopen export.";
 "Подготовка записи…" = "Preparing recording…";
+
+"Все встречи" = "All meetings";
+
+"Без папки" = "Unfiled";
+
+"Создать папку" = "New folder";
+
+"Переименовать папку" = "Rename folder";
+
+"Удалить папку" = "Delete folder";
+
+"Сортировка" = "Sort";
+
+"Сначала новые" = "Newest first";
+
+"Сначала старые" = "Oldest first";
+
+"По названию" = "By title";
+
+"Группировать по дням" = "Group by day";
+
+"Имя папки" = "Folder name";
+
+"Удаление папки сохраняет все встречи." = "Deleting a folder keeps all meetings.";
+
+"Открыть сделку" = "Open deal";
+
+"Переместить в папку" = "Move to folder";
+
+"Не удалось прочитать папки встреч. Исходные записи сохранены." = "Could not read meeting folders. Original recordings are preserved.";
+
+"Введите уникальное имя папки от 1 до 80 символов." = "Enter a unique folder name between 1 and 80 characters.";
+
+"Не удалось сохранить папки встреч. Исходные записи сохранены." = "Could not save meeting folders. Original recordings are preserved.";

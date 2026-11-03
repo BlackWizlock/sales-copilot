@@ -46,9 +46,10 @@ import CopilotCore
     }
     func restoreConnection(allowInteraction: Bool = false) async {
         guard client == nil, !busy else { return }
+        busy = true; defer { busy = false }
         do {
-            guard let credentials = try BitrixCredentials.load(allowInteraction: allowInteraction) else { return }
-            try await connect(credentials)
+            guard let credentials = try await KeychainAccess.offMain({ try BitrixCredentials.load(allowInteraction: allowInteraction) }) else { return }
+            try await connect(credentials, alreadyBusy: true)
         } catch { self.error = L10n.error(error); status = L10n.string("Подключение не проверено") }
     }
     func checkConnection() async {
@@ -66,8 +67,8 @@ import CopilotCore
             try credentials.save()
         } catch { self.error = L10n.error(error) }
     }
-    private func connect(_ credentials: BitrixCredentials) async throws {
-        guard !busy else { throw CopilotError.message(L10n.string("Дождитесь текущего обращения к Битрикс24")) }
+    private func connect(_ credentials: BitrixCredentials, alreadyBusy: Bool = false) async throws {
+        guard alreadyBusy || !busy else { throw CopilotError.message(L10n.string("Дождитесь текущего обращения к Битрикс24")) }
         busy = true; defer { busy = false }
         let candidate = BitrixClient(credentials: credentials)
         let checked = try await candidate.checkConnection()

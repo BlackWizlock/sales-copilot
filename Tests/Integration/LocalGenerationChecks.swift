@@ -5,7 +5,8 @@ import CopilotCore
 private final class InferenceFixture: URLProtocol {
     nonisolated(unsafe) static var reply = Data()
     nonisolated(unsafe) static var queue: [Data] = []
-    nonisolated(unsafe) static var auditIncludesUnquoted = false
+    nonisolated(unsafe) static var oversizedExtraction = false
+    nonisolated(unsafe) static var largestAuditPrompt = 0
     override class func canInit(with request: URLRequest) -> Bool {
         request.url?.host == "127.0.0.1" && request.url?.port == 11434
     }
@@ -22,8 +23,11 @@ private final class InferenceFixture: URLProtocol {
             body = result
         }
         if let body, let value = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
-           let prompt = value["prompt"] as? String, prompt.contains("FACT 0"), prompt.contains("Нецитируемая фраза") {
-            Self.auditIncludesUnquoted = true
+           let prompt = value["prompt"] as? String {
+            if prompt.contains("FACT 0") { Self.largestAuditPrompt = max(Self.largestAuditPrompt, prompt.count) }
+            if !prompt.contains("FACT 0"), let format = value["format"] as? [String: Any],
+               let properties = format["properties"] as? [String: Any], let facts = properties["facts"] as? [String: Any],
+               let maximum = facts["maxItems"] as? Int, maximum > 6 { Self.oversizedExtraction = true }
         }
         let data = request.url?.path == "/api/tags" ? Data("{\"models\":[]}".utf8) : (Self.queue.isEmpty ? Self.reply : Self.queue.removeFirst())
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
@@ -56,12 +60,25 @@ private final class InferenceFixture: URLProtocol {
         print("PASS: unfinished inference rejected; complete structured response preserved")
         var session = MeetingSession(title: "Synthetic")
         session.state = .completed
-        session.transcript = [TranscriptLine(source: .meeting, start: 0, end: 3, text: "Договорились провести аудит. Нецитируемая фраза о переезде.")]
+        session.transcript = [TranscriptLine(source: .meeting, start: 0, end: 3, text: "Договорились провести аудит.")]
         let valid = """
-        {"facts":[{"kind":"decision","text":"Провести аудит.","owner":"","deadline":"","evidence":[{"segmentID":"\(session.transcript[0].id.uuidString)","quote":"Договорились провести аудит."}]}]}
+        {"facts":[{"kind":"decision","text":"Провести аудит.","owner":"","deadline":"","sourceIDs":[0]}]}
         """
-        let accepted = #"{"verdicts":[{"index":0,"supported":true,"kind":"decision"}]}"#
-        let rejected = #"{"verdicts":[{"index":0,"supported":false,"kind":"decision"}]}"#
+        let indexed = try JSONDecoder().decode(GroundedMeetingNotes.IndexedDraft.self, from: Data(valid.utf8))
+        let resolved = indexed.grounded(in: session.transcript)
+        precondition(resolved.facts[0].evidence[0].quote == session.transcript[0].text)
+        precondition(resolved.facts[0].evidence[0].segmentID == session.transcript[0].id)
+        precondition(indexed.grounded(in: session.transcript, allowedSourceIDs: []).facts[0].evidence.isEmpty,
+                     "A source outside the current batch cannot support a fact")
+        let accepted = #"{"verdicts":{"0":{"supported":true,"kind":"decision"}}}"#
+        let shortLines = [TranscriptLine(source: .meeting, start: 0, end: 1, text: "Предлагаю провести аудит."),
+                          TranscriptLine(source: .microphone, start: 1, end: 2, text: "Да.")]
+        let shortDraft = valid.replacingOccurrences(of: "[0]", with: "[0,1]")
+        let shortResolved = try JSONDecoder().decode(GroundedMeetingNotes.IndexedDraft.self, from: Data(shortDraft.utf8)).grounded(in: shortLines)
+        let shortAudit = try JSONDecoder().decode(GroundedMeetingNotes.Audit.self, from: Data(#"{"verdicts":[{"index":0,"supported":true,"kind":"decision"}]}"#.utf8))
+        precondition(shortResolved.validated(in: shortLines, audit: shortAudit).facts.count == 1,
+                     "An exact short acceptance must not erase an explicit agreement")
+        let rejected = #"{"verdicts":{"0":{"supported":false,"kind":"decision"}}}"#
         func envelope(_ value: String) throws -> Data {
             try JSONSerialization.data(withJSONObject: ["response":value,"done":true,"done_reason":"stop"])
         }
@@ -73,7 +90,7 @@ private final class InferenceFixture: URLProtocol {
             throw CopilotError.message("FAIL: malformed summary did not recover with a bounded retry")
         }
         precondition(controller.summaryText.contains("Провести аудит."))
-        precondition(!InferenceFixture.auditIncludesUnquoted, "Semantic audit must judge the cited quotation, not unrelated neighbouring sentences")
+        precondition(!InferenceFixture.oversizedExtraction, "Summary extraction must bound output to six concise facts per batch")
         print("PASS: malformed summary recovered; validated citations preserved")
         let singleFact = try JSONSerialization.jsonObject(with: Data(valid.utf8)) as! [String: Any]
         let fact = (singleFact["facts"] as! [[String: Any]])[0]
@@ -92,12 +109,12 @@ private final class InferenceFixture: URLProtocol {
         }
         print("PASS: unsupported claim with unrelated real citation rejected; previous result preserved")
         // A permissive audit cannot override an invented citation or local numerical grounding.
-        let wrongQuote = valid.replacingOccurrences(of: "Договорились провести аудит.", with: "Договорились согласовать скидку.")
-        InferenceFixture.queue = [try envelope(wrongQuote), try envelope(accepted)]
+        let wrongIndex = valid.replacingOccurrences(of: #""sourceIDs":[0]"#, with: #""sourceIDs":[9999]"#)
+        InferenceFixture.queue = [try envelope(wrongIndex), try envelope(accepted)]
         controller.summarize()
         for _ in 0..<200 where controller.busySummary { try await Task.sleep(nanoseconds: 10_000_000) }
         precondition(!controller.error.isEmpty && controller.summaryText.contains("Провести аудит."))
-        InferenceFixture.queue = [try envelope(valid), try envelope(#"{"verdicts":[]}"#)]
+        InferenceFixture.queue = [try envelope(valid), try envelope(#"{"verdicts":{}}"#)]
         controller.summarize()
         for _ in 0..<200 where controller.busySummary { try await Task.sleep(nanoseconds: 10_000_000) }
         precondition(!controller.error.isEmpty && controller.summaryText.contains("Провести аудит."))
@@ -115,6 +132,36 @@ private final class InferenceFixture: URLProtocol {
         for _ in 0..<200 where controller.busySummary { try await Task.sleep(nanoseconds: 10_000_000) }
         precondition(!controller.summaryText.contains("Иван") && !controller.summaryText.contains("завтра"))
         print("PASS: per-fact numerical and explicit owner/deadline guards enforced independently of model audit")
+        for ids in ["[-1]", "[0,0]"] {
+            InferenceFixture.queue = [try envelope(valid.replacingOccurrences(of: "[0]", with: ids)), try envelope(accepted)]
+            controller.summarize()
+            for _ in 0..<200 where controller.busySummary { try await Task.sleep(nanoseconds: 10_000_000) }
+            precondition(!controller.error.isEmpty)
+        }
+        var discussion = session
+        discussion.id = UUID()
+        discussion.transcript = [TranscriptLine(source: .meeting, start: 0, end: 3, text: "Надо посмотреть материалы. В прошлый раз решили пойти через знакомого.")]
+        let falseAction = valid.replacingOccurrences(of: "decision", with: "action")
+            .replacingOccurrences(of: "Провести аудит.", with: "Посмотреть материалы.")
+        InferenceFixture.queue = [try envelope(falseAction), try envelope(actionAudit)]
+        controller.observe(discussion, directory: nil)
+        for _ in 0..<200 where controller.busySummary { try await Task.sleep(nanoseconds: 10_000_000) }
+        precondition(!controller.error.isEmpty, "A discussion cannot become an assigned task even with a permissive audit")
+        var multi = MeetingSession(title: "Synthetic two batches")
+        multi.state = .completed
+        multi.transcript = [TranscriptLine(source: .meeting, start: 0, end: 3, text: "Договорились провести аудит. " + String(repeating: "тема ", count: 790)),
+                            TranscriptLine(source: .meeting, start: 4, end: 6, text: "Обсудили обучение сотрудников и его стоимость отдельно от аудита.")]
+        let second = valid.replacingOccurrences(of: "Провести аудит.", with: "Обсудили обучение сотрудников.")
+            .replacingOccurrences(of: "decision", with: "topic").replacingOccurrences(of: "[0]", with: "[1]")
+        InferenceFixture.largestAuditPrompt = 0
+        InferenceFixture.queue = [try envelope(valid), try envelope(accepted), try envelope(second), try envelope(accepted.replacingOccurrences(of: "decision", with: "topic"))]
+        controller.observe(multi, directory: nil)
+        for _ in 0..<200 where controller.busySummary { try await Task.sleep(nanoseconds: 10_000_000) }
+        precondition(controller.error.isEmpty && controller.record.summary?.citations.count == 2)
+        precondition(controller.summaryText.contains("аудит") && controller.summaryText.contains("обучение"))
+        precondition(InferenceFixture.largestAuditPrompt < 5000, "Audit must not duplicate source text inside fact JSON")
+        precondition(InferenceFixture.queue.isEmpty)
+        print("PASS: short explicit acceptance, invalid/duplicate indices, two-batch evidence and audit prompt budget")
         let previous = controller.summaryText
         InferenceFixture.queue = [try envelope("{"), try envelope("{")]
         controller.summarize()

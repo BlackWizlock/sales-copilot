@@ -3,7 +3,7 @@ import Security
 import CopilotCore
 
 /// The user explicitly pastes their own personal inbound webhook. No existing integration secrets are imported.
-struct BitrixCredentials: Codable {
+struct BitrixCredentials: Codable, Sendable {
     let userID: String
     let secret: String
     let portal: String

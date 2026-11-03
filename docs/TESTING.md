@@ -122,3 +122,17 @@ Full local CI after independent-review fixes exited0. The semantic summary pipel
 Actual local model on ten synthetic objections passed; hint latency from a ready transcript p50=1.461s/p95=5.189s. Proposal/negation summary test, exact quotations and reload passed. This is not live audio latency.
 
 CRM transport covers read-back of deal/marker/description/status and downloaded content SHA-256. Same-count replacement attachments are rejected; ambiguous writes reconcile without another create. Export includes exact transcript/audio bytes; CoreChecks verifies dedup and manually assigned names. Transport fixtures use synthetic M4A header bytes to test payload integrity, not codec validity. Real AAC/ASR/export is tested separately by full CI:19.04s archive,1.16s processing/export. Native automatic assembly, real-PR summary, actual CRM files and public channel are recorded only after observation below.
+
+## Проверка кандидата14 03.11.2026
+
+CoreChecks с папками и GUI lease прошёл; синтетические интеграции локальной генерации прошли после воспроизведённой ошибки discussion-to-action. Каталог549 ключей RU/EN без пропусков. Полный CI14 и переносимая упаковка прошли; нативная проверка нового меню ещё не завершена.
+
+Две реальные локальные проверки PR (старый Whisper small и отдельная копия Parakeet) показали неполный и местами неверный смысловой разбор. Совпадение цитат и успешный JSON не являются приёмкой качества. Реальные клиентские тексты остаются только в приватной рабочей диагностике.
+
+Создана синтетическая тестовая сделка504; создание подтверждено повторным чтением. Приёмка выгрузки дела, M4A и транскрипции ещё не выполнена.
+
+Установленная14 нативно прошла создание папки «Проверки», перенос синтетической встречи и фильтрацию; metadata0600 проверяется отдельно. MCP установленного приложения: initialize, список6 инструментов и EOF при занятом GUI lease прошли. Второй GUI-процесс завершился без записи.
+
+При явном чтении сохранённого подключения14 macOS остановила SecItemCopyMatching в MainActor (локальный sample). Системный запрос ожидает ответа владельца; инструменту запрещён доступ к SecurityAgent. Кандидат15 переносит чтение вне MainActor; регрессия потока добавлена в изолированную проверку Keychain. Нативная проверка сделки и сохранение в CRM ещё не завершены.
+
+Независимое ревью15 выявило второй путь блокировки через общий lock при создании настроек OpenRouter. Регрессия с занятым производственным lock воспроизвела ожидание конструктора и упала с `Opening settings must not wait for another Keychain request`. Конструктор больше не читает ключ; все чтения асинхронные. Финальная изолированная проверка подключения и отзыв доступа прошли. Повторное независимое ревью Critical/Important дефектов не выявило. Полный финальный CI15 и переносимая упаковка прошли после этого исправления, exit0. Реальный bundled ASR/M4A:1,70с для13,89с архива. Установлена15 через подписанный helper с резервной копией14; папка и членство сохранились, нативная сортировка по названию показала алфавитный список без заголовков дат. Вебхук закрыт macOS до явного доступа, экспорт ещё не принят. Старый зависший экземпляр14 завершён SIGTERM без активной записи; системное окно не автоматизировалось.

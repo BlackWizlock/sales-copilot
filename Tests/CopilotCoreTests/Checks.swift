@@ -24,6 +24,8 @@ func expectThrows<T>(_ expression: @autoclosure () throws -> T, file: StaticStri
         try MeetingChatTests().run()
         PromptContextTests().run()
         try CRMChecks().run()
+        try GUIInstanceTests().run()
+        try MeetingLibraryTests().run()
         try ASRCatalogTests().run()
         try MCPTests().run()
         try DeletionTests().run()

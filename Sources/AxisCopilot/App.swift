@@ -107,6 +107,7 @@ struct AxisCopilotApp: App {
 }
 
 @main enum EntryPoint {
+    @MainActor private static var guiLease: GUIInstanceLease?
     @MainActor static func main() async {
         let arguments = CommandLine.arguments
         if arguments.contains("--verify-calendar-ui") {
@@ -166,6 +167,18 @@ struct AxisCopilotApp: App {
             do { try await verifyFixture(URL(fileURLWithPath: arguments[index + 1])) }
             catch { fputs("\(L10n.error(error))\n", stderr); exit(1) }
             return
+        }
+        do {
+            let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("AxisSalesCopilot/Instance", isDirectory: true)
+            guard let lease = try GUIInstanceLease.acquire(directory: root) else {
+                NSRunningApplication.runningApplications(withBundleIdentifier: "ru.axisconsult.SalesCopilot")
+                    .first { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }?.activate()
+                return
+            }
+            guiLease = lease
+        } catch {
+            fputs("\(L10n.error(error))\n", stderr); return
         }
         AxisCopilotApp.main()
     }

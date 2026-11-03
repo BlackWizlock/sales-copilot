@@ -52,6 +52,7 @@ private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate
     @Published var enabled = false
     @Published var keyInput = ""
     @Published var hasKey = false
+    @Published private(set) var keyBusy = false
     @Published var status = ""
     @Published var models: [Model] = []
     @Published var selectedModel = ""
@@ -78,8 +79,6 @@ private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate
         if let data = UserDefaults.standard.data(forKey: "openRouterBudgetLedger") {
             ledger = (try? JSONDecoder().decode(CloudBudgetLedger.self, from: data)) ?? CloudBudgetLedger(day: Self.day, charged: 1_000_000_000)
         } else { ledger = CloudBudgetLedger(day: Self.day) }
-        do { hasKey = try readKey() != nil }
-        catch { status = L10n.string("Ключ сохранён, но этой сборке нужен доступ. Нажмите «Разрешить доступ к ключу» в настройках OpenRouter.") }
         refreshLedger()
     }
     private static var day: String {
@@ -90,19 +89,30 @@ private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate
         if let data = try? JSONEncoder().encode(ledger) { UserDefaults.standard.set(data, forKey: "openRouterBudgetLedger") }
     }
     private var keyQuery: [String: Any] { [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: keyService, kSecAttrAccount as String: "personal"] }
-    private func readKey(allowInteraction: Bool = false) throws -> String? {
-        var query = keyQuery; query[kSecUseAuthenticationUI as String] = allowInteraction ? kSecUseAuthenticationUIAllow : kSecUseAuthenticationUIFail; query[kSecReturnData as String] = true; query[kSecMatchLimit as String] = kSecMatchLimitOne
+    private func readKey(allowInteraction: Bool = false) async throws -> String? {
+        let service = keyService
+        return try await KeychainAccess.offMain {
+        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: "personal"]
+        query[kSecUseAuthenticationUI as String] = allowInteraction ? kSecUseAuthenticationUIAllow : kSecUseAuthenticationUIFail; query[kSecReturnData as String] = true; query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
         let code = KeychainAccess.copy(query, allowInteraction: allowInteraction, result: &result)
         if code == errSecItemNotFound { return nil }
         guard code == errSecSuccess, let data = result as? Data, let key = String(data: data, encoding: .utf8) else { throw CopilotError.message(L10n.string("Связка ключей не разрешила доступ")) }
         return key
+        }
     }
-    func unlockKey() {
-        do { hasKey = try readKey(allowInteraction: true) != nil; status = hasKey ? L10n.string("Доступ к ключу разрешён") : L10n.string("Сначала сохраните личный ключ") }
+    func loadSavedKey() async {
+        guard !keyBusy else { return }; keyBusy = true; defer { keyBusy = false }
+        do { hasKey = try await readKey() != nil }
+        catch { status = L10n.string("Ключ сохранён, но этой сборке нужен доступ. Нажмите «Разрешить доступ к ключу» в настройках OpenRouter.") }
+    }
+    func unlockKey() async {
+        guard !keyBusy else { return }; keyBusy = true; defer { keyBusy = false }
+        do { hasKey = try await readKey(allowInteraction: true) != nil; status = hasKey ? L10n.string("Доступ к ключу разрешён") : L10n.string("Сначала сохраните личный ключ") }
         catch { status = L10n.string("Связка ключей не разрешила доступ. Ключ не изменён.") }
     }
     func saveKey() {
+        guard !keyBusy else { return }
         do {
             let key = keyInput.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !key.isEmpty, !key.contains("\n") else { throw CopilotError.message(L10n.string("Введите ключ API OpenRouter")) }
@@ -116,25 +126,29 @@ private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate
         } catch { status = L10n.error(error) }
     }
     func removeKey() {
+        guard !keyBusy else { return }
         cancel(); let code = SecItemDelete(keyQuery as CFDictionary)
         guard code == errSecSuccess || code == errSecItemNotFound else { status = L10n.string("Не удалось удалить ключ из Связки ключей"); return }
         keyInput = ""; hasKey = false; enabled = false; status = L10n.string("Ключ удалён")
     }
-    private func request(_ path: String, authenticated: Bool = true) throws -> URLRequest {
+    private func request(_ path: String, authenticated: Bool = true) async throws -> URLRequest {
         var r = URLRequest(url: URL(string: "https://openrouter.ai/api/v1/" + path)!)
-        if authenticated { guard let key = try readKey() else { throw CopilotError.message(L10n.string("Сначала сохраните личный ключ")) }; r.setValue("Bearer " + key, forHTTPHeaderField: "Authorization") }
+        if authenticated { guard let key = try await readKey() else { throw CopilotError.message(L10n.string("Сначала сохраните личный ключ")) }; r.setValue("Bearer " + key, forHTTPHeaderField: "Authorization") }
         return r
     }
     func checkKey() async {
+        guard !keyBusy else { return }; keyBusy = true; defer { keyBusy = false }
         do {
-            let (_, response) = try await network.data(for: request("key"))
+            let request = try await request("key")
+            let (_, response) = try await network.data(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw CopilotError.message(L10n.string("OpenRouter отклонил ключ или доступ к аккаунту")) }
             status = L10n.string("Ключ проверен. Запрос к модели не отправлялся.")
         } catch { status = L10n.error(error) }
     }
     func loadModels() async {
         do {
-            let (data, response) = try await network.data(for: request("models", authenticated: false))
+            let request = try await request("models", authenticated: false)
+            let (data, response) = try await network.data(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw CopilotError.message(L10n.string("Каталог моделей недоступен")) }
             models = try Self.decodeCatalog(data)
             catalogDate = Date(); if !models.contains(where: { $0.id == selectedModel }) { selectedModel = models.first?.id ?? "" }
@@ -172,7 +186,9 @@ private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate
         task = Task {
             defer { if generation == token { busy = false } }
             do {
-                var r = try request("chat/completions"); r.httpMethod = "POST"; r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                var r = try await request("chat/completions"); try Task.checkCancellation()
+                guard generation == token else { return }
+                r.httpMethod = "POST"; r.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 r.httpBody = try JSONSerialization.data(withJSONObject: ["model": model.id, "messages": [["role": "user", "content": question]], "max_tokens": 512, "stream": true, "stream_options": ["include_usage": true], "provider": ["allow_fallbacks": false, "require_parameters": true, "data_collection": "deny", "max_price": ["prompt": NSDecimalNumber(decimal: prices.0 * 1_000_000), "completion": NSDecimalNumber(decimal: prices.1 * 1_000_000), "request": NSDecimalNumber(decimal: prices.2)]]])
                 let (bytes, response) = try await network.bytes(for: r)
                 guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw CopilotError.message((response as? HTTPURLResponse)?.statusCode == 429 ? L10n.string("Лимит запросов OpenRouter. Повторите позже; бюджет остаётся зарезервированным.") : L10n.string("Запрос OpenRouter не выполнен; бюджет остаётся зарезервированным.")) }

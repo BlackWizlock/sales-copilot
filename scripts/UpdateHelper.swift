@@ -6,7 +6,7 @@ import Darwin
     @MainActor static func launch(_ app: URL) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let config = NSWorkspace.OpenConfiguration()
-            config.createsNewApplicationInstance = true
+            config.createsNewApplicationInstance = false
             NSWorkspace.shared.openApplication(at: app, configuration: config) { application, error in
                 if let error { continuation.resume(throwing: error) }
                 else if application != nil { continuation.resume() }

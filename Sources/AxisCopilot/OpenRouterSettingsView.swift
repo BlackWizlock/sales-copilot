@@ -10,10 +10,10 @@ struct OpenRouterSettingsView: View {
             SecureField(L10n.string("Личный ключ OpenRouter"), text: $sandbox.keyInput)
             HStack {
                 Button(L10n.string("Сохранить ключ")) { sandbox.saveKey() }.disabled(sandbox.keyInput.isEmpty)
-                if !sandbox.hasKey { Button(L10n.string("Разрешить доступ к ключу")) { sandbox.unlockKey() } }
+                if !sandbox.hasKey { Button(L10n.string("Разрешить доступ к ключу")) { Task { await sandbox.unlockKey() } } }
                 Button(L10n.string("Проверить ключ")) { Task { await sandbox.checkKey() } }.disabled(!sandbox.hasKey)
                 Button(L10n.string("Удалить ключ")) { sandbox.removeKey() }.disabled(!sandbox.hasKey)
-            }
+            }.disabled(sandbox.keyBusy)
             Button(L10n.string("Загрузить каталог моделей и цены")) { Task { await sandbox.loadModels() } }
             if !sandbox.models.isEmpty {
                 Picker(L10n.string("Облачная модель"), selection: $sandbox.selectedModel) {
@@ -37,6 +37,7 @@ struct OpenRouterSettingsView: View {
             if !sandbox.actualModel.isEmpty { Text(sandbox.actualModel).font(.caption) }
             if !sandbox.status.isEmpty { Text(sandbox.status).font(.caption).textSelection(.enabled) }
         }
+        .task { await sandbox.loadSavedKey() }
         .onChange(of: sandbox.prompt) { _, _ in sandbox.contextChanged() }
         .onChange(of: sandbox.selectedModel) { _, _ in sandbox.contextChanged() }
         .onChange(of: sandbox.enabled) { _, enabled in if !enabled { sandbox.cancel() } }

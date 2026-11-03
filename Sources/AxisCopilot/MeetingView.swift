@@ -2,7 +2,6 @@ import SwiftUI
 import CopilotCore
 
 @MainActor private final class MeetingViewState: ObservableObject {
-    @Published var historyQuery: String = ""
     @Published var tab = 1
     @Published var showCalendar = false
     @Published var showDeal = false
@@ -40,46 +39,9 @@ struct MeetingView: View {
     }
     private var workspace: some View {
         HSplitView {
-            VStack(alignment: .leading, spacing: 16) {
-                Button { viewState.showCalendar = false } label: {
-                    Label(L10n.string("Встречи"), systemImage: "text.bubble").frame(maxWidth: .infinity, alignment: .leading).padding(8)
-                        .background(!viewState.showCalendar ? AxisBrand.teal.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 7))
-                }.buttonStyle(.plain)
-                Button { viewState.showCalendar = true } label: {
-                    Label(L10n.string("Календарь"), systemImage: "calendar").frame(maxWidth: .infinity, alignment: .leading).padding(8)
-                        .background(viewState.showCalendar ? AxisBrand.teal.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 7))
-                }.buttonStyle(.plain)
-                Button(L10n.string("Новая встреча"), systemImage: "plus") { viewState.showCalendar = false; model.newMeeting() }.disabled(model.locked)
-                TextField(L10n.string("Найти встречу"), text: $viewState.historyQuery).textFieldStyle(.roundedBorder)
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 8) {
-                        if model.sessions.isEmpty {
-                            Text(L10n.string("Здесь будут ваши встречи")).font(.callout).foregroundStyle(.secondary).padding(.vertical, 12)
-                        } else if !viewState.historyQuery.isEmpty && !model.sessions.contains(where: { $0.title.localizedCaseInsensitiveContains(viewState.historyQuery) }) {
-                            Text(L10n.string("Совпадений нет")).font(.callout).foregroundStyle(.secondary).padding(.vertical, 12)
-                        }
-                        ForEach(model.sessions.filter { viewState.historyQuery.isEmpty || $0.title.localizedCaseInsensitiveContains(viewState.historyQuery) }) { session in
-                            Button { viewState.showCalendar = false; model.select(session.id) } label: {
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(session.title).font(.headline).lineLimit(1)
-                                    Text(session.created, format: .dateTime.day().month().hour().minute()).font(.caption).foregroundStyle(.secondary)
-                                    if session.state == .interrupted { Text(L10n.string("Прервана · аудио сохранено")).font(.caption).foregroundStyle(.orange) }
-                                }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
-                                    .background(model.current?.id == session.id ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 10))
-                            }.buttonStyle(.plain).disabled(model.locked)
-                                .contextMenu {
-                                    Button(L10n.string("Удалить встречу"), role: .destructive) { viewState.deleting = session }
-                                        .disabled(model.locked || model.updateBusy)
-                                }
-                        }
-                    }
-                }
-                Spacer(minLength: 0)
-                Button(L10n.string("Настройки"), systemImage: "slider.horizontal.3") { CopilotSettingsWindow.shared.show(model: model) }
-                Button(L10n.string("Открыть папку записей"), systemImage: "folder") { model.revealFolder() }
-                UpdateStatusView(updater: model.updater, busy: model.updateBusy)
-            }.padding(20).frame(minWidth: 240, idealWidth: 280, maxWidth: 340)
-                .background(Color(nsColor: .windowBackgroundColor))
+            if let crm = model.crm {
+                MeetingSidebar(model: model, crm: crm, showCalendar: $viewState.showCalendar) { viewState.deleting = $0 }
+            }
             if viewState.showCalendar, let crm = model.crm {
                 MeetingCalendarView(controller: crm, onSelectDeal: { id in
                     guard !model.locked else { return }
