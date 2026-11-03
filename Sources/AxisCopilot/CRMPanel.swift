@@ -192,6 +192,8 @@ struct BitrixConnectionSettingsView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text("CRM · crm").font(.callout.bold())
                 Text(L10n.string("Чтение сделок, компаний, контактов и дел; создание дела встречи только после подтверждения.")).font(.caption).foregroundStyle(.secondary)
+                Text(L10n.string("Диск · disk")).font(.callout.bold())
+                Text(L10n.string("Скачивание вложений созданного дела для проверки сохранности транскрипции и аудио.")).font(.caption).foregroundStyle(.secondary)
                 Text(L10n.string("Календарь · calendar")).font(.callout.bold())
                 Text(L10n.string("Чтение событий вашего календаря и ссылок на встречи.")).font(.caption).foregroundStyle(.secondary)
                 Text(L10n.string("Пользователи (минимально) · user_brief")).font(.callout.bold())

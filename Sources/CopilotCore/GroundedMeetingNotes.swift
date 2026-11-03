@@ -90,10 +90,25 @@ public struct GroundedMeetingNotes: Codable {
     }
 
     public static func combined(_ batches: [GroundedMeetingNotes]) -> GroundedMeetingNotes {
-        var seen = Set<String>()
-        let facts = batches.flatMap(\.facts).filter {
-            let key = $0.kind.rawValue + ":" + $0.text.lowercased().split(whereSeparator: \.isWhitespace).joined(separator: " ")
-            return seen.insert(key).inserted
+        struct Identity: Hashable { let kind: String; let text: String; let owner: String; let deadline: String }
+        func normalized(_ text: String) -> String {
+            text.lowercased().split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        }
+        var positions: [Identity: Int] = [:]
+        var facts: [Fact] = []
+        for fact in batches.flatMap(\.facts) {
+            let key = Identity(kind: fact.kind.rawValue, text: normalized(fact.text),
+                               owner: normalized(fact.owner), deadline: normalized(fact.deadline))
+            if let index = positions[key] {
+                for citation in fact.evidence where !facts[index].evidence.contains(where: {
+                    $0.segmentID == citation.segmentID && $0.quote == citation.quote
+                }) {
+                    facts[index].evidence.append(citation)
+                }
+            } else {
+                positions[key] = facts.count
+                facts.append(fact)
+            }
         }
         return GroundedMeetingNotes(facts: facts)
     }

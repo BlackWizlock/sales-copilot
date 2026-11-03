@@ -8,14 +8,27 @@ actor SyntheticBitrix: BitrixTransport {
     func successfulWriteWithWrongFiles() { timeoutOnWrite = false; corruptFiles = true }
     func successfulWrite() { timeoutOnWrite = false }
     func successfulWriteWithoutFiles() { timeoutOnWrite = false; omitFiles = true }
+    var missingDisk = false
+    var denyFileRead = false
+    var hostileDownload = false
+    var missingFileID = false
+    var legacyDownloads = 0
+    func withoutDisk() { timeoutOnWrite = false; missingDisk = true }
+    func deniedReadAfterWrite() { timeoutOnWrite = false; denyFileRead = true }
+    func malformedFile() { timeoutOnWrite = false; missingFileID = true }
+    func hostileFileURL() { timeoutOnWrite = false; hostileDownload = true }
     var writes = 0
     var savedID: String?
     var savedFields: [String: CRMValue] = [:]
     func send(_ request: URLRequest) async throws -> (Data, Int) {
         let method = request.url!.lastPathComponent
         if method == "crm_show_file.php" {
+            legacyDownloads += 1
+            return (Data("<html>Sign in</html>".utf8), 200)
+        }
+        if method == "download" {
             let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
-            let index = Int(query.first { $0.name == "fileId" }!.value!)! - 601
+            let index = Int(query.first { $0.name == "token" }!.value!)! - 601
             let encoded = savedFields["FILES"]!.array[index].object["fileData"]!.array[1].text
             return (corruptFiles ? Data("Wrong attachment".utf8) : Data(base64Encoded: encoded)!, 200)
         }
@@ -26,6 +39,17 @@ actor SyntheticBitrix: BitrixTransport {
             "calendar.event.get.json": .array([]),
             "crm.contact.get.json": .object(["NAME": .string("Synthetic contact")])
         ]
+        if method == "scope.json" {
+            return (try JSONEncoder().encode(["result": CRMValue.array((missingDisk ? ["crm"] : ["crm", "disk"]).map(CRMValue.string))]), 200)
+        }
+        if method == "disk.file.get.json" {
+            if denyFileRead { return (Data(#"{"error":"ACCESS_DENIED"}"#.utf8), 403) }
+            let id = params["id"]!.text, index = Int(id)! - 601
+            let file = savedFields["FILES"]!.array[index].object["fileData"]!.array
+            let host = hostileDownload ? "external.invalid" : "axisconsult.bitrix24.ru"
+            let result: CRMValue = .object(["ID": .string(id), "TYPE": .string("file"), "NAME": file[0], "SIZE": .number(Double(Data(base64Encoded: file[1].text)!.count)), "DOWNLOAD_URL": .string("https://\(host)/rest/1/synthetic/download/?token=\(id)")])
+            return (try JSONEncoder().encode(["result": result]), 200)
+        }
         if let result = fixtures[method] { return (try JSONEncoder().encode(["result": result]), 200) }
         if method == "crm.activity.add.json" {
             writes += 1; savedFields = params["fields"]!.object; savedID = "777"
@@ -43,7 +67,8 @@ actor SyntheticBitrix: BitrixTransport {
             let files = omitFiles ? [] : (savedFields["FILES"]?.array ?? []).enumerated().map { index, _ in
                 CRMValue.object(["id": .string(String(601 + index)), "url": .string("https://axisconsult.bitrix24.ru/bitrix/tools/crm_show_file.php?fileId=\(601 + index)&ownerTypeId=6&ownerId=777&auth=synthetic")])
             }
-            let rows: [CRMValue] = savedID.map { [.object(["ID": .string($0), "FILES": .array(files)])] } ?? []
+            let checkedFiles = missingFileID ? files.map { _ in CRMValue.object(["url": .string("https://axisconsult.bitrix24.ru/bitrix/tools/crm_show_file.php?ownerTypeId=6&ownerId=777")]) } : files
+            let rows: [CRMValue] = savedID.map { [.object(["ID": .string($0), "FILES": .array(checkedFiles)])] } ?? []
             return (try JSONEncoder().encode(["result": CRMValue.array(rows)]), 200)
         }
         throw URLError(.unsupportedURL)
@@ -81,6 +106,24 @@ struct SyntheticFailureBitrix: BitrixTransport {
         session.transcript = [TranscriptLine(source: .meeting, start: 0, end: 1, text: "Synthetic agreement")]
         let context = DealContext(portal: "axisconsult.bitrix24.ru", dealID: "999", title: "Synthetic deal", fields: ["CONTACT_ID": .string("888"), "ASSIGNED_BY_ID": .string("1")])
         let journal = try CRMJournal(root: root.appendingPathComponent("crm"))
+        var noClientSession = try store.create(title: "Missing client preflight")
+        noClientSession.state = .completed; noClientSession.transcript = session.transcript
+        let noClientContext = DealContext(portal: context.portal, dealID: context.dealID, title: context.title)
+        try journal.bind(noClientContext, meetingID: noClientSession.id)
+        let preflightTransport = SyntheticBitrix(); await preflightTransport.successfulWrite()
+        let preflight = CRMController(store: store, client: BitrixClient(credentials: credentials, transport: preflightTransport), ownerID: "1")
+        preflight.activate(session: noClientSession)
+        preflight.prepareExport(session: noClientSession, summary: "Synthetic summary", audioURL: nil)
+        precondition(preflight.preview == nil, "Missing client must fail before export confirmation")
+        let noIntent = try journal.operation(meetingID: noClientSession.id)
+        let preflightWrites = await preflightTransport.writes
+        precondition(noIntent == nil && preflightWrites == 0, "Local preflight failure must not create an ambiguous journal or send a write")
+        await preflight.selectDeal(context.dealID)
+        preflight.prepareExport(session: noClientSession, summary: "Synthetic summary", audioURL: nil)
+        precondition(preflight.preview != nil, "Refreshing the corrected deal must allow a new preview")
+        await preflight.confirmExport(session: noClientSession, summary: "Synthetic summary", audioURL: nil)
+        precondition(preflight.exportOperation?.state == .completed)
+        print("PASS: missing-client preflight sends no write and allows retry after correcting and refreshing deal")
         try journal.bind(context, meetingID: session.id)
         let transport = SyntheticBitrix()
         let client = BitrixClient(credentials: credentials, transport: transport)
@@ -144,6 +187,8 @@ struct SyntheticFailureBitrix: BitrixTransport {
         precondition(Data(base64Encoded: attachments[1].object["fileData"]!.array[1].text) == audioBytes)
         audioController.prepareExport(session: audioSession, summary: "Reviewed synthetic result", audioURL: audioURL)
         precondition(audioController.preview == nil)
+        let legacyDownloads = await audioTransport.legacyDownloads
+        precondition(legacyDownloads == 0, "Browser attachment URLs must never be used for machine verification")
         print("PASS: selected-deal export contains exact transcript/audio payload and is completed only after read-back; repeat refused")
         // An API ID alone does not prove attached transcript/audio were saved.
         var missingFilesSession = try store.create(title: "Missing server attachments")
@@ -170,6 +215,30 @@ struct SyntheticFailureBitrix: BitrixTransport {
         await wrong.confirmExport(session: replaced, summary: "Synthetic summary", audioURL: nil)
         precondition(wrong.exportOperation?.state == .needsReconciliation, "Unrelated same-count attachments must not confirm export")
         print("PASS: replaced same-count attachment is rejected")
+        for mode in ["missingScope", "deniedRead", "hostileURL", "missingFileID"] {
+            var probe = try store.create(title: mode)
+            probe.state = .completed; probe.transcript = session.transcript
+            try journal.bind(context, meetingID: probe.id)
+            let server = SyntheticBitrix()
+            if mode == "missingScope" { await server.withoutDisk() }
+            if mode == "deniedRead" { await server.deniedReadAfterWrite() }
+            if mode == "missingFileID" { await server.malformedFile() }
+            if mode == "hostileURL" { await server.hostileFileURL() }
+            let checker = CRMController(store: store, client: BitrixClient(credentials: credentials, transport: server), ownerID: "1")
+            checker.activate(session: probe)
+            checker.prepareExport(session: probe, summary: "Synthetic", audioURL: nil)
+            await checker.confirmExport(session: probe, summary: "Synthetic", audioURL: nil)
+            let count = await server.writes
+            if mode == "missingScope" {
+                let operation = try journal.operation(meetingID: probe.id)
+                precondition(count == 0 && operation == nil, "Missing disk scope must fail before write intent")
+            } else {
+                precondition(count == 1 && checker.exportOperation?.state == .needsReconciliation, "Failed read-back after a successful create must block repeat")
+                checker.prepareExport(session: probe, summary: "Synthetic", audioURL: nil)
+                precondition(checker.preview == nil)
+            }
+        }
+        print("PASS: missing disk scope sends no write; read denial and hostile download preserve reconciliation")
         let selectedMeeting = try store.create(title: "Meeting selected through actual client")
         let selecting = CRMController(store: store, client: client, ownerID: "1")
         selecting.activate(session: selectedMeeting)

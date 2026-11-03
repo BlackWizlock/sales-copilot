@@ -7,6 +7,10 @@ private final class InferenceFixture: URLProtocol {
     nonisolated(unsafe) static var queue: [Data] = []
     nonisolated(unsafe) static var oversizedExtraction = false
     nonisolated(unsafe) static var largestAuditPrompt = 0
+    nonisolated(unsafe) static var auditPrompts: [String] = []
+    nonisolated(unsafe) static var holdSecondAudit = false
+    nonisolated(unsafe) static var secondAuditHeld = false
+    private var withheld = false
     override class func canInit(with request: URLRequest) -> Bool {
         request.url?.host == "127.0.0.1" && request.url?.port == 11434
     }
@@ -24,7 +28,10 @@ private final class InferenceFixture: URLProtocol {
         }
         if let body, let value = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
            let prompt = value["prompt"] as? String {
-            if prompt.contains("FACT 0") { Self.largestAuditPrompt = max(Self.largestAuditPrompt, prompt.count) }
+            if prompt.contains("ORIGINAL SOURCES:") { Self.largestAuditPrompt = max(Self.largestAuditPrompt, prompt.count); Self.auditPrompts.append(prompt) }
+            if Self.holdSecondAudit && prompt.hasPrefix("FACT 1\n") {
+                Self.secondAuditHeld = true; withheld = true; return
+            }
             if !prompt.contains("FACT 0"), let format = value["format"] as? [String: Any],
                let properties = format["properties"] as? [String: Any], let facts = properties["facts"] as? [String: Any],
                let maximum = facts["maxItems"] as? Int, maximum > 6 { Self.oversizedExtraction = true }
@@ -34,7 +41,7 @@ private final class InferenceFixture: URLProtocol {
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
     }
-    override func stopLoading() {}
+    override func stopLoading() { if withheld { Self.secondAuditHeld = false } }
 }
 
 @main struct LocalGenerationChecks {
@@ -70,15 +77,15 @@ private final class InferenceFixture: URLProtocol {
         precondition(resolved.facts[0].evidence[0].segmentID == session.transcript[0].id)
         precondition(indexed.grounded(in: session.transcript, allowedSourceIDs: []).facts[0].evidence.isEmpty,
                      "A source outside the current batch cannot support a fact")
-        let accepted = #"{"verdicts":{"0":{"supported":true,"kind":"decision"}}}"#
+        let accepted = #"{"verdicts":{"0":{"supported":true,"meaningful":true,"kind":"decision"}}}"#
         let shortLines = [TranscriptLine(source: .meeting, start: 0, end: 1, text: "Предлагаю провести аудит."),
                           TranscriptLine(source: .microphone, start: 1, end: 2, text: "Да.")]
         let shortDraft = valid.replacingOccurrences(of: "[0]", with: "[0,1]")
         let shortResolved = try JSONDecoder().decode(GroundedMeetingNotes.IndexedDraft.self, from: Data(shortDraft.utf8)).grounded(in: shortLines)
-        let shortAudit = try JSONDecoder().decode(GroundedMeetingNotes.Audit.self, from: Data(#"{"verdicts":[{"index":0,"supported":true,"kind":"decision"}]}"#.utf8))
+        let shortAudit = try JSONDecoder().decode(GroundedMeetingNotes.Audit.self, from: Data(#"{"verdicts":[{"index":0,"supported":true,"meaningful":true,"kind":"decision"}]}"#.utf8))
         precondition(shortResolved.validated(in: shortLines, audit: shortAudit).facts.count == 1,
                      "An exact short acceptance must not erase an explicit agreement")
-        let rejected = #"{"verdicts":{"0":{"supported":false,"kind":"decision"}}}"#
+        let rejected = #"{"verdicts":{"0":{"supported":false,"meaningful":true,"kind":"decision"}}}"#
         func envelope(_ value: String) throws -> Data {
             try JSONSerialization.data(withJSONObject: ["response":value,"done":true,"done_reason":"stop"])
         }
@@ -98,7 +105,7 @@ private final class InferenceFixture: URLProtocol {
         InferenceFixture.queue = [try envelope(twoFacts), try envelope(accepted)]
         controller.summarize()
         for _ in 0..<200 where controller.busySummary { try await Task.sleep(nanoseconds: 10_000_000) }
-        precondition(!controller.error.isEmpty, "Incomplete audit must not silently replace summary with partial coverage")
+        precondition(!controller.error.isEmpty && controller.summaryText.contains("Провести аудит."), "A late incomplete audit must preserve the previous summary rather than publish a partial result")
         // A true quotation elsewhere must not license an unrelated fabricated decision.
         let fabricated = valid.replacingOccurrences(of: "Провести аудит.", with: "Клиент согласовал переезд в дом Артёма.")
         InferenceFixture.queue = [try envelope(fabricated), try envelope(rejected)]
@@ -108,6 +115,21 @@ private final class InferenceFixture: URLProtocol {
             throw CopilotError.message("FAIL: unrelated real citation licensed a fabricated summary claim")
         }
         print("PASS: unsupported claim with unrelated real citation rejected; previous result preserved")
+        var incoherent = session
+        incoherent.id = UUID()
+        incoherent.transcript = [TranscriptLine(source: .meeting, start: 0, end: 3, text: "Обсуждаем стоимость протеин.")]
+        let incoherentFact = valid.replacingOccurrences(of: "decision", with: "topic")
+            .replacingOccurrences(of: "Провести аудит.", with: "Обсудили стоимость протеин.")
+        InferenceFixture.queue = [try envelope(incoherentFact), try envelope(#"{"verdicts":{"0":{"supported":true,"meaningful":false,"kind":"topic"}}}"#)]
+        controller.observe(incoherent, directory: nil)
+        for _ in 0..<200 where controller.busySummary { try await Task.sleep(nanoseconds: 10_000_000) }
+        precondition(!controller.error.isEmpty && !controller.summaryText.contains("протеин"),
+                     "A literally quoted but incoherent recognition fragment must not become a meaningful summary topic")
+        InferenceFixture.queue = [try envelope(valid), try envelope(accepted)]
+        controller.observe(session, directory: nil)
+        for _ in 0..<200 where controller.busySummary { try await Task.sleep(nanoseconds: 10_000_000) }
+        precondition(controller.error.isEmpty && controller.summaryText.contains("Провести аудит."))
+        print("PASS: incoherent but literally supported speech is omitted without inventing a correction")
         // A permissive audit cannot override an invented citation or local numerical grounding.
         let wrongIndex = valid.replacingOccurrences(of: #""sourceIDs":[0]"#, with: #""sourceIDs":[9999]"#)
         InferenceFixture.queue = [try envelope(wrongIndex), try envelope(accepted)]
@@ -162,6 +184,56 @@ private final class InferenceFixture: URLProtocol {
         precondition(InferenceFixture.largestAuditPrompt < 5000, "Audit must not duplicate source text inside fact JSON")
         precondition(InferenceFixture.queue.isEmpty)
         print("PASS: short explicit acceptance, invalid/duplicate indices, two-batch evidence and audit prompt budget")
+        var isolated = MeetingSession(title: "Synthetic independent facts")
+        isolated.state = .completed
+        isolated.transcript = [
+            TranscriptLine(source: .meeting, start: 0, end: 3, text: "Стоимость аудита 100 тысяч рублей."),
+            TranscriptLine(source: .meeting, start: 4, end: 7, text: "Срок обучения 4 недели.")
+        ]
+        let independentFacts = #"{"facts":[{"kind":"topic","text":"Обсудили стоимость аудита: 100 тысяч рублей.","owner":"","deadline":"","sourceIDs":[0]},{"kind":"topic","text":"Упомянули срок обучения: 4 недели.","owner":"","deadline":"","sourceIDs":[1]}]}"#
+        InferenceFixture.auditPrompts = []
+        InferenceFixture.queue = [try envelope(independentFacts),
+            try envelope(#"{"verdicts":{"0":{"supported":true,"meaningful":true,"kind":"topic"}}}"#),
+            try envelope(#"{"verdicts":{"1":{"supported":true,"meaningful":true,"kind":"topic"}}}"#)]
+        controller.observe(isolated, directory: nil)
+        for _ in 0..<200 where controller.busySummary { try await Task.sleep(nanoseconds: 10_000_000) }
+        precondition(InferenceFixture.auditPrompts.count == 2,
+                     "Each fact must be audited separately so unrelated sources cannot contaminate its verdict")
+        precondition(!InferenceFixture.auditPrompts[0].contains("Срок обучения") && !InferenceFixture.auditPrompts[1].contains("Стоимость аудита"))
+        precondition(controller.error.isEmpty && controller.summaryText.contains("100") && controller.summaryText.contains("4 недели"))
+        precondition(InferenceFixture.queue.isEmpty)
+        print("PASS: independent facts use only their own evidence and preserve both price and duration")
+        let completeSummary = controller.summaryText
+        let missingMeaningful = #"{"verdicts":{"1":{"supported":true,"kind":"topic"}}}"#
+        InferenceFixture.queue = [try envelope(independentFacts),
+            try envelope(#"{"verdicts":{"0":{"supported":true,"meaningful":true,"kind":"topic"}}}"#),
+            try envelope(missingMeaningful), try envelope(missingMeaningful)]
+        controller.summarize()
+        for _ in 0..<200 where controller.busySummary { try await Task.sleep(nanoseconds: 10_000_000) }
+        precondition(!controller.error.isEmpty && controller.summaryText == completeSummary && InferenceFixture.queue.isEmpty,
+                     "Missing coherence verdict must fail closed without replacing the saved summary")
+        InferenceFixture.queue = [try envelope(independentFacts),
+            try envelope(#"{"verdicts":{"0":{"supported":true,"meaningful":true,"kind":"topic"}}}"#),
+            try envelope(#"{"verdicts":{"1":{"supported":true,"meaningful":false,"kind":"topic"}}}"#)]
+        controller.summarize()
+        for _ in 0..<200 where controller.busySummary { try await Task.sleep(nanoseconds: 10_000_000) }
+        precondition(controller.error.isEmpty && controller.summaryText.contains("100") && !controller.summaryText.contains("4 недели"),
+                     "Rejecting an incoherent fact must retain independently accepted facts")
+        print("PASS: missing coherence verdict preserves prior summary; mixed verdicts retain accepted facts")
+        let beforeCancellation = controller.summaryText
+        InferenceFixture.holdSecondAudit = true
+        InferenceFixture.secondAuditHeld = false
+        InferenceFixture.queue = [try envelope(independentFacts),
+            try envelope(#"{"verdicts":{"0":{"supported":true,"meaningful":true,"kind":"topic"}}}"#)]
+        controller.summarize()
+        for _ in 0..<200 where !InferenceFixture.secondAuditHeld { try await Task.sleep(nanoseconds: 10_000_000) }
+        precondition(controller.busySummary && InferenceFixture.secondAuditHeld)
+        controller.cancelSummary()
+        for _ in 0..<200 where InferenceFixture.secondAuditHeld { try await Task.sleep(nanoseconds: 10_000_000) }
+        InferenceFixture.holdSecondAudit = false
+        precondition(!controller.busySummary && !InferenceFixture.secondAuditHeld && controller.summaryText == beforeCancellation)
+        precondition(InferenceFixture.queue.isEmpty)
+        print("PASS: cancellation during the second fact audit cancels inference and preserves the complete saved summary")
         let previous = controller.summaryText
         InferenceFixture.queue = [try envelope("{"), try envelope("{")]
         controller.summarize()

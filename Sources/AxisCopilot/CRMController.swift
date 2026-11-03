@@ -173,6 +173,7 @@ import CopilotCore
         do {
             guard let context = context(for: session.id) else { throw CopilotError.message(L10n.string("Сначала выберите и привяжите сделку")) }
             guard let client else { throw CopilotError.message(L10n.string("Битрикс24 не подключён")) }; _ = client
+            _ = try BitrixClient.meetingCommunication(context)
             let p = try CRMExportPreview(session: session, context: context, summary: summary, audioURL: audioURL)
             if let old = try requireJournal().operation(meetingID: session.id), old.state == .completed || old.state == .needsReconciliation {
                 exportOperation = old; preview = nil
@@ -189,11 +190,14 @@ import CopilotCore
         func isCurrent() -> Bool { activeMeetingID == session.id && generation == requestGeneration }
         do {
             guard try p.matches(session: session, summary: summary, audioURL: audioURL), let bound = context(for: session.id), bound.dealID == p.dealID else { throw CopilotError.message(L10n.string("Встреча изменилась. Откройте предварительный просмотр заново.")) }
+            _ = try BitrixClient.meetingCommunication(bound)
             let journal = try requireJournal()
             if let old = try journal.operation(meetingID: session.id), old.state == .completed || old.state == .needsReconciliation { exportOperation = old; preview = nil; throw CopilotError.message(L10n.string("Повторная отправка запрещена. Сначала сверьте результат.")) }
             busy = true; defer { busy = false }
+            try await client.validateExportAccess()
+            guard isCurrent() else { return }
             var operation = CRMExport(preview: p)
-            try journal.save(operation) // Persist intent before the first network call.
+            try journal.save(operation) // Persist intent before any potentially mutating network call.
             if let existing = try await client.findExport(operation) {
                 operation.activityID = existing; operation.state = .needsReconciliation; try journal.save(operation)
                 try await client.verifyExport(operation, activityID: existing)
@@ -211,7 +215,8 @@ import CopilotCore
                 if isCurrent() { exportOperation = operation; preview = nil; error = nil }
             } catch {
                 // Even a malformed response may follow a successful server write. Never retry blindly.
-                if case BitrixFailure.rejected = error { operation.state = .rejected }
+                if operation.activityID != nil { operation.state = .needsReconciliation }
+                else if case BitrixFailure.rejected = error { operation.state = .rejected }
                 else if case BitrixFailure.permission = error { operation.state = .rejected }
                 else { operation.state = .needsReconciliation }
                 operation.updated = Date(); try journal.save(operation)

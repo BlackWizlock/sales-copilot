@@ -21,6 +21,23 @@ struct IntelligenceTests {
         let parts = IntelligenceContext.batches(["first paragraph", "middle paragraph", "last paragraph"], maxCharacters: 20)
         precondition(parts.count == 3)
         precondition(parts.joined().contains("last paragraph"))
+        func notes(_ kind: String, _ text: String, _ owner: String, _ deadline: String, _ segment: UUID) throws -> GroundedMeetingNotes {
+            let data = try JSONSerialization.data(withJSONObject: ["facts": [["kind": kind, "text": text,
+                "owner": owner, "deadline": deadline, "evidence": [["segmentID": segment.uuidString, "quote": text]]]]])
+            return try JSONDecoder().decode(GroundedMeetingNotes.self, from: data)
+        }
+        let sourceA = UUID(), sourceB = UUID()
+        let firstTopic = try notes("topic", "Обсудили обучение.", "", "", sourceA)
+        let repeatedTopic = try notes("topic", "Обсудили обучение.", "", "", sourceB)
+        let combinedTopics = GroundedMeetingNotes.combined([firstTopic, repeatedTopic, firstTopic])
+        precondition(combinedTopics.facts.count == 1 && combinedTopics.structured.citations.count == 2,
+                     "Removing a repeated summary topic must preserve distinct supporting quotations")
+        let firstTask = try notes("action", "Отправить документы.", "Анна", "пятница", sourceA)
+        let secondTask = try notes("action", "Отправить документы.", "Иван", "понедельник", sourceB)
+        let combinedTasks = GroundedMeetingNotes.combined([firstTask, secondTask])
+        precondition(combinedTasks.structured.actions.count == 2,
+                     "Identical task wording for different owners or deadlines must remain separate")
+        print("PASS: summary deduplication preserves source quotations and distinct assignments")
         var ledger = CloudBudgetLedger(day: "synthetic")
         do { try ledger.reserve(0.01, limit: 0, day: "synthetic"); preconditionFailure("Zero budget must block") } catch {}
         try ledger.reserve(0.01, limit: 0.02, day: "synthetic")

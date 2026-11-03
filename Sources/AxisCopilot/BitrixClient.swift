@@ -161,15 +161,19 @@ actor BitrixClient {
         guard rows.count <= 1 else { throw CopilotError.message(L10n.string("Найдено несколько результатов. Проверьте карточку вручную.")) }
         return rows.first?["ID"]?.text
     }
-    func createMeeting(_ operation: CRMExport, context: DealContext, audio: Data?) async throws -> String {
-        let p = operation.preview
-        guard context.dealID == p.dealID, context.portal == p.portal, p.portal == credentials.portal else { throw CopilotError.message(L10n.string("Целевая сделка изменилась")) }
+    static func meetingCommunication(_ context: DealContext) throws -> (id: String, type: Double) {
         let contact = context.fields["CONTACT_ID"]?.text ?? ""
         let company = context.fields["COMPANY_ID"]?.text ?? ""
         let entityID: String; let entityType: Double
         if Int(contact).map({ $0 > 0 }) == true { entityID = contact; entityType = 3 }
         else if Int(company).map({ $0 > 0 }) == true { entityID = company; entityType = 4 }
         else { throw CopilotError.message(L10n.string("У сделки нет контакта или компании для обычного дела встречи. Добавьте клиента в карточку; поля приложение не меняет.")) }
+        return (entityID, entityType)
+    }
+    func createMeeting(_ operation: CRMExport, context: DealContext, audio: Data?) async throws -> String {
+        let p = operation.preview
+        guard context.dealID == p.dealID, context.portal == p.portal, p.portal == credentials.portal else { throw CopilotError.message(L10n.string("Целевая сделка изменилась")) }
+        let communication = try Self.meetingCommunication(context)
         let iso = ISO8601DateFormatter()
         var files: [CRMValue] = [.object(["fileData": .array([.string("transcript.txt"), .string(Data(p.transcript.utf8).base64EncodedString())])])]
         if let audio, let name = p.audioName { files.append(.object(["fileData": .array([.string(name), .string(audio.base64EncodedString())])])) }
@@ -177,12 +181,18 @@ actor BitrixClient {
             "OWNER_TYPE_ID": .number(2), "OWNER_ID": .string(p.dealID), "TYPE_ID": .number(1), "SUBJECT": .string(p.title),
             "START_TIME": .string(iso.string(from: p.started)), "END_TIME": .string(iso.string(from: p.ended)), "COMPLETED": .string("Y"),
             "RESPONSIBLE_ID": context.fields["ASSIGNED_BY_ID"] ?? .string(credentials.userID),
-            "COMMUNICATIONS": .array([.object(["ENTITY_ID": .string(entityID), "ENTITY_TYPE_ID": .number(entityType), "VALUE": .string("")])]),
+            "COMMUNICATIONS": .array([.object(["ENTITY_ID": .string(communication.id), "ENTITY_TYPE_ID": .number(communication.type), "VALUE": .string("")])]),
             "DESCRIPTION": .string(operation.activityDescription), "DESCRIPTION_TYPE": .number(1),
             "ORIGINATOR_ID": .string("AXIS_COPILOT"), "ORIGIN_ID": .string(operation.marker), "FILES": .array(files)
         ])])
         guard let id = result["result"]?.text, Int(id).map({ $0 > 0 }) == true else { throw BitrixFailure.malformed }
         return id
+    }
+    func validateExportAccess() async throws {
+        let scopes = try await call("scope")["result"]?.array.map(\.text) ?? []
+        guard scopes.contains("crm"), scopes.contains("disk") else {
+            throw CopilotError.message(L10n.string("Для сохранения и проверки вложений включите права CRM (crm) и Диск (disk) в настройках личного вебхука. Отправка не выполнена."))
+        }
     }
     /// A successful write response alone does not prove the meeting's content was stored.
     func verifyExport(_ operation: CRMExport, activityID: String) async throws {
@@ -208,20 +218,41 @@ actor BitrixClient {
         guard files.count == expected.count else { throw BitrixFailure.malformed }
         for file in files {
             let values = file.object
-            guard let raw = values["url"]?.text, let url = URL(string: raw),
+            guard let fileID = values["id"]?.text, Int(fileID).map({ $0 > 0 }) == true,
+                  let raw = values["url"]?.text, let url = URL(string: raw),
                   url.scheme == "https", url.host == credentials.portal, url.user == nil, url.password == nil,
                   url.port == nil || url.port == 443,
                   url.path == "/bitrix/tools/crm_show_file.php",
                   let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
-                  parts.queryItems?.first(where: { $0.name == "fileId" })?.value == values["id"]?.text,
+                  parts.queryItems?.first(where: { $0.name == "fileId" })?.value == fileID,
                   parts.queryItems?.first(where: { $0.name == "ownerId" })?.value == activityID,
                   parts.queryItems?.first(where: { $0.name == "ownerTypeId" })?.value == "6" else { throw BitrixFailure.malformed }
-            var request = URLRequest(url: url); request.httpMethod = "GET"
+            // FILES.id identifies the attached Drive object. The browser URL above proves
+            // its activity binding, but cannot authenticate a machine download with a webhook.
+            let disk = try await call("disk.file.get", ["id": .string(fileID)])["result"]?.object ?? [:]
+            guard disk["ID"]?.text == fileID, disk["TYPE"]?.text == "file",
+                  let name = disk["NAME"]?.text,
+                  name == "transcript.txt" || name == operation.preview.audioName,
+                  let sizeText = disk["SIZE"]?.text, let size = Int(sizeText), size >= 0, size <= 50 * 1024 * 1024,
+                  let machineRaw = disk["DOWNLOAD_URL"]?.text,
+                  let machine = URLComponents(string: machineRaw),
+                  machine.scheme == "https", machine.host == credentials.portal,
+                  machine.user == nil, machine.password == nil, machine.fragment == nil,
+                  machine.port == nil || machine.port == 443,
+                  machine.path == "/rest/download.json" || machine.path.range(of: "^/rest/[0-9]+/[A-Za-z0-9_-]+/download/?$", options: .regularExpression) != nil,
+                  let downloadURL = machine.url,
+                  machine.queryItems?.contains(where: { $0.name == "token" && !($0.value ?? "").isEmpty }) == true else { throw BitrixFailure.malformed }
+            let expectedSize = name == "transcript.txt" ? Data(operation.preview.transcript.utf8).count : operation.preview.audioBytes
+            guard size == expectedSize else { throw BitrixFailure.malformed }
+            var request = URLRequest(url: downloadURL); request.httpMethod = "GET"
+            request.setValue("AxisCopilot/1.0", forHTTPHeaderField: "User-Agent")
+            request.setValue("*/*", forHTTPHeaderField: "Accept")
+            request.setValue("https://\(credentials.portal)/", forHTTPHeaderField: "Referer")
             let data: Data; let status: Int
             do { (data, status) = try await transport.send(request) }
             catch is CancellationError { throw CancellationError() }
             catch { throw BitrixFailure.network }
-            guard status == 200, data.count <= 50 * 1024 * 1024,
+            guard status == 200, data.count == size,
                   let index = expected.firstIndex(of: CRMExportPreview.sha256(data)) else { throw BitrixFailure.malformed }
             expected.remove(at: index)
         }

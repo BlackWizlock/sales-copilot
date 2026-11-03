@@ -626,3 +626,11 @@
 "Введите уникальное имя папки от 1 до 80 символов." = "Enter a unique folder name between 1 and 80 characters.";
 
 "Не удалось сохранить папки встреч. Исходные записи сохранены." = "Could not save meeting folders. Original recordings are preserved.";
+
+"Проверка выводов: часть %@ из %@, факт %@ из %@" = "Checking findings: part %@ of %@, fact %@ of %@";
+
+"Диск · disk" = "Drive · disk";
+
+"Скачивание вложений созданного дела для проверки сохранности транскрипции и аудио." = "Download the created activity’s attachments to verify the transcript and audio.";
+
+"Для сохранения и проверки вложений включите права CRM (crm) и Диск (disk) в настройках личного вебхука. Отправка не выполнена." = "Enable CRM (crm) and Drive (disk) permissions in your personal webhook settings to save and verify attachments. Nothing was sent.";

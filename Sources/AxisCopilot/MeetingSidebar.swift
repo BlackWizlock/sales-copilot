@@ -127,27 +127,8 @@ struct MeetingSidebar: View {
         }.buttonStyle(.plain)
     }
     private func row(_ session: MeetingSession) -> some View {
-        Button { showCalendar = false; model.select(session.id) } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(session.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                    Spacer(minLength: 0)
-                    if session.state == .recording { Circle().fill(.red).frame(width: 6, height: 6) }
-                    if session.state == .interrupted { Image(systemName: "exclamationmark.circle").foregroundStyle(.orange).help(L10n.string("Прервана · аудио сохранено")) }
-                }
-                if groupByDay {
-                    Text(session.created, format: .dateTime.hour().minute()).font(.caption).foregroundStyle(.secondary)
-                } else {
-                    Text(session.created, format: .dateTime.day().month().hour().minute()).font(.caption).foregroundStyle(.secondary)
-                }
-                if let deal = state.bindings[session.id] {
-                    Label(deal.title, systemImage: "link").font(.caption).foregroundStyle(AxisBrand.teal).lineLimit(1)
-                        .help(deal.title + " · " + deal.portal)
-                }
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).padding(.vertical, 7)
-                .background(!showCalendar && model.current?.id == session.id ? AxisBrand.teal.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 6))
-                .contentShape(Rectangle())
-        }.buttonStyle(.plain).disabled(model.locked)
+        MeetingSidebarRow(model: model, state: state, showCalendar: $showCalendar,
+                          session: session, groupByDay: groupByDay)
             .contextMenu {
                 if let deal = state.bindings[session.id] { Link(L10n.string("Открыть сделку"), destination: deal.url) }
                 Menu(L10n.string("Переместить в папку")) {
@@ -191,5 +172,39 @@ struct MeetingSidebar: View {
         } catch is MeetingLibrary.ValidationError {
             model.error = L10n.string("Введите уникальное имя папки от 1 до 80 символов.")
         } catch { model.error = L10n.string("Не удалось сохранить папки встреч. Исходные записи сохранены.") }
+    }
+}
+
+/// Observe selection and deal metadata at the row boundary, independently of
+/// ForEach retaining sessions with unchanged identities.
+@MainActor private struct MeetingSidebarRow: View {
+    @ObservedObject var model: MeetingModel
+    @ObservedObject var state: SidebarState
+    @Binding var showCalendar: Bool
+    let session: MeetingSession
+    let groupByDay: Bool
+
+    var body: some View {
+        Button { showCalendar = false; model.select(session.id) } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(session.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                    Spacer(minLength: 0)
+                    if session.state == .recording { Circle().fill(.red).frame(width: 6, height: 6) }
+                    if session.state == .interrupted { Image(systemName: "exclamationmark.circle").foregroundStyle(.orange).help(L10n.string("Прервана · аудио сохранено")) }
+                }
+                if groupByDay {
+                    Text(session.created, format: .dateTime.hour().minute()).font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text(session.created, format: .dateTime.day().month().hour().minute()).font(.caption).foregroundStyle(.secondary)
+                }
+                if let deal = state.bindings[session.id] {
+                    Label(deal.title, systemImage: "link").font(.caption).foregroundStyle(AxisBrand.teal).lineLimit(1)
+                        .help(deal.title + " · " + deal.portal)
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).padding(.vertical, 7)
+                .background(!showCalendar && model.current?.id == session.id ? AxisBrand.teal.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+        }.buttonStyle(.plain).disabled(model.locked)
     }
 }

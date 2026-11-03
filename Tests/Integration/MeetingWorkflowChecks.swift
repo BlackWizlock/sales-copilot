@@ -11,6 +11,31 @@ import CopilotCore
         throw CopilotError.message("FAIL: local workflow exceeded five minutes")
     }
     @MainActor static func main() async throws {
+        var terms = MeetingSession(title: "Synthetic summary coverage")
+        terms.state = .completed
+        terms.transcript = [
+            TranscriptLine(source: .meeting, start: 0, end: 4, text: "Добрый день!"),
+            TranscriptLine(source: .microphone, start: 0.5, end: 3, text: "*музыка*"),
+            TranscriptLine(source: .meeting, start: 8, end: 12, text: "Мы обсуждаем коммерческое предложение, стоимость протеин."),
+            TranscriptLine(source: .microphone, start: 8.5, end: 10, text: "Да, время!"),
+            TranscriptLine(source: .meeting, start: 16, end: 20, text: "Срок выполнения работы 4 недели."),
+            TranscriptLine(source: .microphone, start: 16.5, end: 18, text: "*музыка*"),
+            TranscriptLine(source: .meeting, start: 20.2, end: 21, text: "Добрый день!"),
+            TranscriptLine(source: .meeting, start: 21.2, end: 24, text: "Мы обсуждаем коммерческое предложение."),
+            TranscriptLine(source: .meeting, start: 24, end: 28, text: "Своимость проекта составляет 100 тысяч рублей, срок выполнения"),
+            TranscriptLine(source: .microphone, start: 24.5, end: 26, text: "[музыка]"),
+            TranscriptLine(source: .meeting, start: 27.9, end: 32, text: "работы 4 недели.")
+        ]
+        let coverage = try await GroundedSummaryGenerator(runtime: .shared).generate(IntelligenceSnapshot(terms)) { print($0); fflush(stdout) }
+        let coverageText = coverage.markdown.lowercased()
+        guard coverageText.contains("100"), coverageText.contains("4"), coverageText.contains("недел"),
+              coverage.citations.allSatisfy({ citation in terms.transcript.contains { $0.id == citation.segmentID && $0.text.contains(citation.quote) } }) else {
+            throw CopilotError.message("FAIL: summary omitted explicit price or duration from synthetic recorded transcript: " + coverage.markdown)
+        }
+        guard !coverage.overview.lowercased().contains("протеин"), !coverage.overview.lowercased().contains("музык") else {
+            throw CopilotError.message("FAIL: summary promoted an incoherent recognition fragment into a meaningful topic: " + coverage.overview)
+        }
+        print("PASS: real local summary retains explicit price and duration in fragmented synthetic ASR")
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("axis-workflow-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }

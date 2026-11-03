@@ -23,7 +23,12 @@ actor DelayedCRMTransport: BitrixTransport {
                 releaseGate = gate; waiting.forEach { $0.resume() }; waiting = []
             }
         }
-        if method == "crm_show_file.php" { return (Data("[0.0] Звук встречи: Synthetic text".utf8), 200) }
+        if method == "scope.json" { return (Data(#"{"result":["crm","disk"]}"#.utf8), 200) }
+        if method == "disk.file.get.json" {
+            let bytes = Data("[0.0] Звук встречи: Synthetic text".utf8).count
+            return (try JSONEncoder().encode(["result": CRMValue.object(["ID": .string("601"), "TYPE": .string("file"), "NAME": .string("transcript.txt"), "SIZE": .number(Double(bytes)), "DOWNLOAD_URL": .string("https://synthetic.bitrix24.ru/rest/1/synthetic/download/?token=test")])]), 200)
+        }
+        if method == "download" { return (Data("[0.0] Звук встречи: Synthetic text".utf8), 200) }
         if method == "crm.activity.add.json" { throw URLError(.timedOut) }
         if method == "crm.activity.get.json", let foundID {
             let fields: [String: CRMValue] = ["ID": .string(foundID), "OWNER_TYPE_ID": .string("2"), "OWNER_ID": .string("999"), "ORIGINATOR_ID": .string("AXIS_COPILOT"), "ORIGIN_ID": .string(marker), "DESCRIPTION": .string("Summary A\n\nТранскрипция во вложении.\nID экспорта: " + marker), "COMPLETED": .string("Y"), "FILES": .array([.string("601")])]
@@ -50,6 +55,19 @@ actor DelayedCRMTransport: BitrixTransport {
         let journal = try CRMJournal(root: root.appendingPathComponent("crm"))
         try journal.bind(context, meetingID: a.id); try journal.bind(other, meetingID: b.id)
         let credentials = try BitrixCredentials(webhook: "https://synthetic.bitrix24.ru/rest/1/synthetic/")
+        let scopeTransport = DelayedCRMTransport(methodToPause: "scope.json", foundID: nil)
+        let scopeController = CRMController(store: store, client: BitrixClient(credentials: credentials, transport: scopeTransport), ownerID: "1")
+        scopeController.activate(session: a)
+        scopeController.prepareExport(session: a, summary: "Summary A", audioURL: nil)
+        let checkingScope = Task { await scopeController.confirmExport(session: a, summary: "Summary A", audioURL: nil) }
+        await scopeTransport.waitUntilPaused()
+        scopeController.activate(session: b)
+        scopeController.prepareExport(session: b, summary: "Summary B", audioURL: nil)
+        await scopeTransport.release(); await checkingScope.value
+        let staleIntent = try journal.operation(meetingID: a.id)
+        precondition(staleIntent == nil && scopeController.preview?.meetingID == b.id && scopeController.error == nil,
+                     "Switching meetings during scope preflight must not persist an intent or replace the new preview")
+        print("PASS: switching meetings during scope preflight sends no write and preserves the new preview")
         let delayed = DelayedCRMTransport(methodToPause: "crm.activity.add.json", foundID: nil)
         let controller = CRMController(store: store, client: BitrixClient(credentials: credentials, transport: delayed), ownerID: "1")
         controller.activate(session: a)
