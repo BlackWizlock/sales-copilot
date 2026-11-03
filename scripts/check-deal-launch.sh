@@ -7,7 +7,7 @@ scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 core=("$bin"/CopilotCore.build/*.o)
 timeout 90 swiftc -I "$bin/Modules" "${core[@]}" "$root/Sources/AxisCopilot/Localization.swift" \
-    "$root/Sources/AxisCopilot/BitrixCredentials.swift" \
+    "$root/Sources/AxisCopilot/CredentialWire.swift" "$root/Sources/AxisCopilot/CredentialBridge.swift" "$root/Sources/AxisCopilot/BitrixCredentials.swift" \
     "$root/Sources/AxisCopilot/KeychainAccess.swift" \
     "$root/Sources/AxisCopilot/BitrixClient.swift" \
     "$root/Sources/AxisCopilot/CRMController.swift" \

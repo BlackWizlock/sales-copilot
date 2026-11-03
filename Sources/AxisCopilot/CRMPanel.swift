@@ -217,9 +217,9 @@ struct BitrixConnectionSettingsView: View {
                     let value = ui.webhook; ui.webhook = ""
                     Task { await controller.connect(webhook: value) }
                 }.disabled(ui.webhook.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || controller.busy)
-                Button(controller.connected ? L10n.string("Проверить подключение") : L10n.string("Разрешить доступ к подключению")) { Task { await controller.checkConnection() } }
+                Button(controller.connected ? L10n.string("Проверить подключение") : L10n.string("Проверить сохранённое подключение")) { Task { await controller.checkConnection() } }
                     .disabled(controller.busy)
-                Button(L10n.string("Удалить сохранённое подключение")) { ui.webhook = ""; controller.disconnect() }
+                Button(L10n.string("Отключить подключение")) { ui.webhook = ""; Task { await controller.disconnect() } }
                     .disabled(!controller.connected || controller.busy)
                     .help(L10n.string("Отключает Битрикс24 и удаляет сохранённый ключ из Связки ключей этого Mac."))
             }

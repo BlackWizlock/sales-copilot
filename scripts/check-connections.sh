@@ -6,15 +6,15 @@ bin="$(swift build --build-system native --package-path "$root" --show-bin-path 
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 core=("$bin"/CopilotCore.build/*.o)
-common=(-I "$bin/Modules" "${core[@]}" "$root/Sources/AxisCopilot/Localization.swift" "$root/Sources/AxisCopilot/BitrixCredentials.swift" "$root/Sources/AxisCopilot/KeychainAccess.swift")
+common=(-I "$bin/Modules" "${core[@]}" "$root/Sources/AxisCopilot/Localization.swift" "$root/Sources/AxisCopilot/CredentialWire.swift" "$root/Sources/AxisCopilot/CredentialBridge.swift" "$root/Sources/AxisCopilot/BitrixCredentials.swift" "$root/Sources/AxisCopilot/KeychainAccess.swift")
 timeout 90 swiftc "${common[@]}" "$root/Tests/BitrixIntegration/BitrixKeychainChecks.swift" -o "$scratch/keychain"
 timeout 30 "$scratch/keychain"
-timeout 90 swiftc -I "$bin/Modules" "${core[@]}" "$root/Sources/AxisCopilot/Localization.swift" "$root/Sources/AxisCopilot/KeychainAccess.swift" "$root/Sources/AxisCopilot/OpenRouterClient.swift" "$root/Tests/BitrixIntegration/OpenRouterKeychainChecks.swift" -o "$scratch/openrouter-keychain"
+timeout 90 swiftc -I "$bin/Modules" "${core[@]}" "$root/Sources/AxisCopilot/Localization.swift" "$root/Sources/AxisCopilot/KeychainAccess.swift" "$root/Sources/AxisCopilot/CredentialWire.swift" "$root/Sources/AxisCopilot/CredentialBridge.swift" "$root/Sources/AxisCopilot/OpenRouterClient.swift" "$root/Tests/BitrixIntegration/OpenRouterKeychainChecks.swift" -o "$scratch/openrouter-keychain"
 timeout 30 "$scratch/openrouter-keychain"
 timeout 90 swiftc "${common[@]}" "$root/Sources/AxisCopilot/BitrixClient.swift" "$root/Sources/AxisCopilot/CRMController.swift" "$root/Tests/BitrixIntegration/CRMTransportChecks.swift" -o "$scratch/transport"
 timeout 60 "$scratch/transport"
 
-timeout 90 swiftc -I "$bin/Modules" "${core[@]}" "$root/Sources/AxisCopilot/Localization.swift" "$root/Sources/AxisCopilot/KeychainAccess.swift" "$root/Sources/AxisCopilot/OpenRouterClient.swift" "$root/Tests/Integration/OpenRouterCatalogChecks.swift" -o "$scratch/openrouter-catalog"
+timeout 90 swiftc -I "$bin/Modules" "${core[@]}" "$root/Sources/AxisCopilot/Localization.swift" "$root/Sources/AxisCopilot/KeychainAccess.swift" "$root/Sources/AxisCopilot/CredentialWire.swift" "$root/Sources/AxisCopilot/CredentialBridge.swift" "$root/Sources/AxisCopilot/OpenRouterClient.swift" "$root/Tests/Integration/OpenRouterCatalogChecks.swift" -o "$scratch/openrouter-catalog"
 timeout 30 "$scratch/openrouter-catalog"
 
 timeout 90 swiftc "${common[@]}" "$root/Sources/AxisCopilot/BitrixClient.swift" "$root/Sources/AxisCopilot/CRMController.swift" "$root/Tests/BitrixIntegration/CRMIsolationChecks.swift" -o "$scratch/isolation"

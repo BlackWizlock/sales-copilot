@@ -20,8 +20,9 @@ struct BitrixCredentials: Codable, Sendable {
     }
     func endpoint(method: String) -> URL { URL(string: "https://\(portal)/rest/\(userID)/\(secret)/\(method).json")! }
     func save(service: String = Self.service, account: String = Self.account) throws {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
         let data = try JSONEncoder().encode(self)
+        if service == Self.service, account == Self.account { try CredentialVault.save(data, domain: .bitrix); return }
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
         let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
         if status == errSecItemNotFound {
             var add = query; add[kSecValueData as String] = data; add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
@@ -29,15 +30,24 @@ struct BitrixCredentials: Codable, Sendable {
         } else if status != errSecSuccess { throw CopilotError.message(L10n.string("Связка ключей не разрешила изменение подключения")) }
     }
     static func load(service: String = Self.service, account: String = Self.account, allowInteraction: Bool = false) throws -> BitrixCredentials? {
+        if service == Self.service, account == Self.account {
+            guard let data = try CredentialVault.read(.bitrix, legacy: { try legacyData(service: service, account: account, allowInteraction: false) }) else { return nil }
+            return try JSONDecoder().decode(Self.self, from: data)
+        }
+        guard let data = try legacyData(service: service, account: account, allowInteraction: allowInteraction) else { return nil }
+        return try JSONDecoder().decode(Self.self, from: data)
+    }
+    private static func legacyData(service: String, account: String, allowInteraction: Bool) throws -> Data? {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne, kSecUseAuthenticationUI as String: allowInteraction ? kSecUseAuthenticationUIAllow : kSecUseAuthenticationUIFail]
         var result: CFTypeRef?
         let status = KeychainAccess.copy(query, allowInteraction: allowInteraction, result: &result)
         if status == errSecItemNotFound { return nil }
-        if status == errSecInteractionNotAllowed || status == errSecAuthFailed { throw CopilotError.message(L10n.string("Для этой сборки требуется доступ к сохранённому подключению. Откройте настройки Битрикс24 и нажмите «Разрешить доступ к подключению». Ключ сохранён.")) }
+        if status == errSecInteractionNotAllowed || status == errSecAuthFailed { throw CopilotError.message(L10n.string("Старое подключение защищено macOS. Для переноса в постоянное хранилище вставьте вебхук заново и нажмите «Сохранить и подключить».")) }
         guard status == errSecSuccess, let data = result as? Data else { throw CopilotError.message(L10n.string("Связка ключей не разрешила чтение подключения")) }
-        return try JSONDecoder().decode(Self.self, from: data)
+        return data
     }
     static func remove(service: String = Self.service, account: String = Self.account) throws {
+        if service == Self.service, account == Self.account { try CredentialVault.remove(.bitrix); return }
         let status = SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account] as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else { throw CopilotError.message(L10n.string("Связка ключей не разрешила отключение")) }
     }

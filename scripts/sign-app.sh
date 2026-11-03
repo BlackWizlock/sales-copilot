@@ -21,12 +21,16 @@ sign() {
     else
         # Explicit stable DR: unchanged between builds with this ID and certificate.
         local identifier
+        local target_options=("${signing_options[@]}")
+        if [[ "$target" == "$app" ]]; then
+            target_options+=(--options runtime --entitlements "$(cd "$(dirname "$0")/.." && pwd)/Resources/AxisCopilot.entitlements")
+        elif [[ "$(basename "$target")" == AxisCredentials ]]; then target_options+=(--options runtime); fi
         if [[ "$target" == "$app" ]]; then identifier=ru.axisconsult.SalesCopilot; else identifier="ru.axisconsult.SalesCopilot.$(basename "$target")"; fi
-        /usr/bin/codesign --force --sign "$identity" "${signing_options[@]}" --identifier "$identifier" \
+        /usr/bin/codesign --force --sign "$identity" "${target_options[@]}" --identifier "$identifier" \
             --requirements "=designated => identifier \"$identifier\" and certificate leaf = H\"$identity\"" "$target"
     fi
 }
-for executable in "$app/Contents/Resources/Tools/AxisUpdater" "$app/Contents/Resources/Tools/whisper-cli"; do
+for executable in "$app/Contents/Resources/Tools/AxisCredentials" "$app/Contents/Resources/Tools/AxisUpdater" "$app/Contents/Resources/Tools/whisper-cli"; do
     if [[ -f "$executable" ]]; then sign "$executable"; fi
 done
 if [[ -d "$app/Contents/Resources/Tools/Ollama" ]]; then

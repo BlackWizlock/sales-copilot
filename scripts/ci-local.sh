@@ -7,6 +7,7 @@ python3 "$repo_root/scripts/check-localizations.py"
 bash "$repo_root/scripts/check-local-intelligence.sh"
 bash "$repo_root/scripts/check-materials.sh"
 bash "$repo_root/scripts/check-connections.sh"
+bash "$repo_root/scripts/check-credential-continuity.sh"
 bash "$repo_root/scripts/check-mcp.sh"
 bash "$repo_root/scripts/check-deal-launch.sh"
 bash scripts/build-app.sh

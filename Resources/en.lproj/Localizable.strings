@@ -634,3 +634,21 @@
 "Скачивание вложений созданного дела для проверки сохранности транскрипции и аудио." = "Download the created activity’s attachments to verify the transcript and audio.";
 
 "Для сохранения и проверки вложений включите права CRM (crm) и Диск (disk) в настройках личного вебхука. Отправка не выполнена." = "Enable CRM (crm) and Drive (disk) permissions in your personal webhook settings to save and verify attachments. Nothing was sent.";
+
+"Защищённое хранилище недоступно. Разблокируйте Mac и проверьте подключение повторно." = "Secure storage is unavailable. Unlock your Mac and check the connection again.";
+
+"Старое подключение защищено macOS. Для переноса в постоянное хранилище вставьте вебхук заново и нажмите «Сохранить и подключить»." = "The previous connection is protected by macOS. To move it to permanent storage, paste the webhook again and click “Save and connect”.";
+
+"Проверить сохранённое подключение" = "Check saved connection";
+
+"Проверить сохранённый ключ" = "Check saved key";
+
+"Старый ключ защищён macOS. Вставьте его заново для переноса в постоянное хранилище." = "The previous key is protected by macOS. Paste it again to move it to permanent storage.";
+
+"Подключение отключено на этом Mac" = "Connection disabled on this Mac";
+
+"Отключить подключение" = "Disconnect";
+
+"Ключ отключён на этом Mac" = "Key disabled on this Mac";
+
+"Отключить ключ" = "Disable key";

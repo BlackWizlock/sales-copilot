@@ -54,7 +54,7 @@ import CopilotCore
     }
     func checkConnection() async {
         guard !busy else { return }
-        guard let client else { await restoreConnection(allowInteraction: true); return }
+        guard let client else { await restoreConnection(); return }
         busy = true; defer { busy = false }
         do { let result = try await client.checkConnection(); ownerID = result.userID; status = result.message; error = nil }
         catch { self.error = L10n.error(error) }
@@ -64,7 +64,9 @@ import CopilotCore
         do {
             let credentials = try BitrixCredentials(webhook: webhook)
             try await connect(credentials)
-            try credentials.save()
+            busy = true
+            defer { busy = false }
+            try await KeychainAccess.offMain { try credentials.save() }
         } catch { self.error = L10n.error(error) }
     }
     private func connect(_ credentials: BitrixCredentials, alreadyBusy: Bool = false) async throws {
@@ -78,9 +80,10 @@ import CopilotCore
         }
         client = candidate; ownerID = checked.userID; connected = true; connectedPortal = credentials.portal; status = checked.message; error = nil
     }
-    func disconnect() {
+    func disconnect() async {
         guard !busy else { return }
-        do { try BitrixCredentials.remove(); client = nil; connected = false; connectedPortal = nil; preview = nil; generation = UUID(); status = L10n.string("Подключение удалено из Связки ключей"); deals = []; meetings = []; calendarDeals = [:]; calendarDealErrors = [:] }
+        busy = true; defer { busy = false }
+        do { try await KeychainAccess.offMain { try BitrixCredentials.remove() }; client = nil; connected = false; connectedPortal = nil; preview = nil; generation = UUID(); status = L10n.string("Подключение отключено на этом Mac"); deals = []; meetings = []; calendarDeals = [:]; calendarDealErrors = [:] }
         catch { self.error = L10n.error(error) }
     }
     func search(_ text: String) async {

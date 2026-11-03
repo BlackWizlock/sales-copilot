@@ -14,6 +14,7 @@ updated: 2026-11-03
 
 | ID | Требование | Фактическое состояние | Следующее доказательство или действие |
 | --- | --- | --- | --- |
+| 43 | Постоянный доступ к ключам после alpha-обновлений | Установлена0.3.8(18); владелец повторно сохранил вебхук, нативное подключение работает без пароля. Постоянный компонент и разные A/B сборки прошли синтетическую проверку | Точный чистый checkout после коммита; обновление с уже перенесённым ключом |
 | 01 | Запись микрофона и звука приложения, M4A | Реализовано; установленная сборка9 записала оба потока, issues=[] | Живой Zoom и Телемост |
 | 02 | Устранение ошибки старта -10875 | Исправлено; клиентские частоты совпадают; реальный старт9 прошёл | Регрессия при смене устройства |
 | 03 | Эхоподавление новой записи | VoiceProcessingIO, защита от воспроизведения, раздельные источники | Живой разговор через динамики и одновременная речь |
@@ -134,7 +135,7 @@ updated: 2026-11-03
 
 1. Zoom, Telemost, Granola coexistence, headphones and long meeting still require live acceptance.
 2. Bitrix24 personal connection and calendar reading verified; real CRM attachment/write not accepted; native Bitrix meeting analysis remains unconfirmed. Synthetic integration checks are available.
-3. Permanent signing and central update client implemented. Installed build 5→6 retained system-audio discovery without renewed access; actual capture/all future releases not proven. Central host configured; current publication evidence is in SC-011 below; no Apple notarization.
+3. Permanent signing and central update client implemented. Installed build 5 / 6 retained system-audio discovery without renewed access; actual capture/all future releases not proven. Central host configured; current publication evidence is in SC-011 below; no Apple notarization.
 4. Small local model can misrecognize names/numbers; 8-second chunks can split phrases. No measured live p95.
 5. Audio not yet flushed from RAM can be lost in a crash. Persisted WAVs remain even if transcription/export fails.
 6. MCP is opt-in per meeting and read-only. OpenRouter is a separate synthetic/public sandbox; confidential materials must not be sent there. Full dynamic UI/error translation remains incomplete.
@@ -210,3 +211,20 @@ updated: 2026-11-03
 - Open: Mac заблокировался во время повторного разбора PR; результат полного прохода в UI не подтверждён. Общий канал остаётся на11 до этой приёмки и чистого CI. Исходный ответ сбойной11 не сохранён, точная причина не доказана.
 
 Проверка16 и кандидат17 03.11.2026. Штатный updater установил16 с резервной15. Владелец подтвердил Keychain, нативно подключены сделки и привязана свежая синтетическая встреча. Плеер и чат проверены. Реальный тест REST выявил browser HTML по FILES.url; кандидат17 использует disk.file.get. То же дело2472 сверено без повторного создания: две контрольные суммы совпали, журнал completed, повтор creates0. Нативный экспорт17 ещё не принят. Реальная PR всё ещё недостаточного качества; Qwen3.5:9b не принята из-за отсутствия структурированного режима в движке и потери суммы в обходном эксперименте. Полный обновлённый CI17 выполняется; работа продолжается.
+
+## 0.3.8 (18) прекращение повторных запросов Keychain
+
+- Owner/Agent: Codex
+- Source: прямой запрос владельца 03.11.2026 «реши вопрос с этими запросами»
+- Scope: постоянное защищённое хранение Bitrix/OpenRouter без повторного подтверждения каждой сборки
+- Handoff: owned
+- Branch: codex/recording-prototype
+- Причина воспроизведена: прежний login-Keychain ACL содержит partition cdhash разных сборок; одинаковые сертификат и DR не обеспечили тихое чтение второй сборке.
+- Новый компонент устанавливается один раз, фиксирует SHA-256, проверяет live caller, сертификат, hardened runtime и cdhash. Новые ключи остаются в Keychain.
+- Синтетическая проверка A/B прошла; при миграции атомарный create-only сохраняет приоритет новых ключей и отключения. Повреждение записи не считается отсутствием.
+- Полный CI изолированного staged-source снимка прошёл, exit0; финальные connection/localization/build прошли, 553/553 ru/en. Подписанный переносимый комплект прошёл реальное синтетическое ASR/M4A. После коммита обязателен CI точного чистого checkout перед push.
+- Штатное обновление17 на18 установлено без пароля. Старый ключ тихо отклонён macOS; владелец повторно ввёл вебхук, нативное подключение18 подтверждено. Постоянный компонент установлен с0700/0500; SHA-256 совпал с подписанным bundled-компонентом. Старый ключ не удалён.
+- Дело2472 в тестовой сделке504 сверено production-кодом по SHA-256, повтор создаёт0 дел; нативный экспорт новой тестовой встречи остаётся следующим шагом после подключения. Резюме и остальные пункты очереди остаются открыты.
+
+- Gate18: Jev safe_to_apply0.18, incomplete_context, автоматический коммит остановлен. Владелец явно разрешил разовое исключение03.11.2026; независимое ревью блокирующих дефектов не нашло. Исключение разрешает коммит; push только после точного чистого CI, без merge.
+- Нативная отправка новой синтетической встречи18 остановлена до записи: у повторно введённого вебхука нет требуемого disk scope. Показ сообщения об ошибке под открытым предпросмотром требует исправления; никаких новых дел этот отказ не создал.

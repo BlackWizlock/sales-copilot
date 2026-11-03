@@ -9,10 +9,10 @@ struct OpenRouterSettingsView: View {
             Toggle(L10n.string("Включить облачную песочницу"), isOn: $sandbox.enabled)
             SecureField(L10n.string("Личный ключ OpenRouter"), text: $sandbox.keyInput)
             HStack {
-                Button(L10n.string("Сохранить ключ")) { sandbox.saveKey() }.disabled(sandbox.keyInput.isEmpty)
-                if !sandbox.hasKey { Button(L10n.string("Разрешить доступ к ключу")) { Task { await sandbox.unlockKey() } } }
+                Button(L10n.string("Сохранить ключ")) { Task { await sandbox.saveKey() } }.disabled(sandbox.keyInput.isEmpty)
+                if !sandbox.hasKey { Button(L10n.string("Проверить сохранённый ключ")) { Task { await sandbox.unlockKey() } } }
                 Button(L10n.string("Проверить ключ")) { Task { await sandbox.checkKey() } }.disabled(!sandbox.hasKey)
-                Button(L10n.string("Удалить ключ")) { sandbox.removeKey() }.disabled(!sandbox.hasKey)
+                Button(L10n.string("Отключить ключ")) { Task { await sandbox.removeKey() } }.disabled(!sandbox.hasKey)
             }.disabled(sandbox.keyBusy)
             Button(L10n.string("Загрузить каталог моделей и цены")) { Task { await sandbox.loadModels() } }
             if !sandbox.models.isEmpty {

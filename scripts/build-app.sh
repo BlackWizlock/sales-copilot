@@ -32,6 +32,7 @@ for checkout in "${AXIS_SWIFT_SCRATCH_PATH:-$repo_root/.build}/checkouts/"*; do
 done
 mkdir -p "$app_path/Contents/Resources/Tools"
 swiftc -O -target arm64-apple-macosx15.0 "$repo_root/Sources/AxisCopilot/UpdateSupport.swift" "$repo_root/scripts/UpdateHelper.swift" -o "$app_path/Contents/Resources/Tools/AxisUpdater"
+timeout 90 swiftc -O -target arm64-apple-macosx15.0 "$repo_root/Sources/AxisCopilot/CredentialWire.swift" "$repo_root/scripts/CredentialHelper.swift" -o "$app_path/Contents/Resources/Tools/AxisCredentials"
 bash "$repo_root/scripts/setup-intelligence.sh" "$app_path"
 bash "$repo_root/scripts/sign-app.sh" "$app_path"
 printf '%s\n' "$app_path"

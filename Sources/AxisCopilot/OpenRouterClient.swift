@@ -92,44 +92,62 @@ private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate
     private func readKey(allowInteraction: Bool = false) async throws -> String? {
         let service = keyService
         return try await KeychainAccess.offMain {
+        func legacy() throws -> Data? {
+        let interaction = service != "ru.axisconsult.copilot.openrouter" && allowInteraction
         var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: "personal"]
-        query[kSecUseAuthenticationUI as String] = allowInteraction ? kSecUseAuthenticationUIAllow : kSecUseAuthenticationUIFail; query[kSecReturnData as String] = true; query[kSecMatchLimit as String] = kSecMatchLimitOne
+        query[kSecUseAuthenticationUI as String] = interaction ? kSecUseAuthenticationUIAllow : kSecUseAuthenticationUIFail; query[kSecReturnData as String] = true; query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
-        let code = KeychainAccess.copy(query, allowInteraction: allowInteraction, result: &result)
+        let code = KeychainAccess.copy(query, allowInteraction: interaction, result: &result)
         if code == errSecItemNotFound { return nil }
-        guard code == errSecSuccess, let data = result as? Data, let key = String(data: data, encoding: .utf8) else { throw CopilotError.message(L10n.string("Связка ключей не разрешила доступ")) }
+        guard code == errSecSuccess, let data = result as? Data else { throw CopilotError.message(L10n.string("Связка ключей не разрешила доступ")) }
+        return data
+        }
+        let data = try service == "ru.axisconsult.copilot.openrouter" ? CredentialVault.read(.openrouter, legacy: legacy) : legacy()
+        guard let data else { return nil }
+        guard let key = String(data: data, encoding: .utf8) else { throw CredentialFailure.protocolMismatch }
         return key
         }
     }
     func loadSavedKey() async {
         guard !keyBusy else { return }; keyBusy = true; defer { keyBusy = false }
         do { hasKey = try await readKey() != nil }
-        catch { status = L10n.string("Ключ сохранён, но этой сборке нужен доступ. Нажмите «Разрешить доступ к ключу» в настройках OpenRouter.") }
+        catch { status = L10n.string("Старый ключ защищён macOS. Вставьте его заново для переноса в постоянное хранилище.") }
     }
     func unlockKey() async {
         guard !keyBusy else { return }; keyBusy = true; defer { keyBusy = false }
-        do { hasKey = try await readKey(allowInteraction: true) != nil; status = hasKey ? L10n.string("Доступ к ключу разрешён") : L10n.string("Сначала сохраните личный ключ") }
+        do { hasKey = try await readKey() != nil; status = hasKey ? L10n.string("Доступ к ключу разрешён") : L10n.string("Сначала сохраните личный ключ") }
         catch { status = L10n.string("Связка ключей не разрешила доступ. Ключ не изменён.") }
     }
-    func saveKey() {
-        guard !keyBusy else { return }
+    func saveKey() async {
+        guard !keyBusy else { return }; keyBusy = true; defer { keyBusy = false }
         do {
             let key = keyInput.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !key.isEmpty, !key.contains("\n") else { throw CopilotError.message(L10n.string("Введите ключ API OpenRouter")) }
             let data = Data(key.utf8)
-            let update = SecItemUpdate(keyQuery as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+            let service = keyService, query = keyQuery
+            try await KeychainAccess.offMain {
+            if service == "ru.axisconsult.copilot.openrouter" { try CredentialVault.save(data, domain: .openrouter); return }
+            let update = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
             if update == errSecItemNotFound {
-                var add = keyQuery; add[kSecValueData as String] = data; add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+                var add = query; add[kSecValueData as String] = data; add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
                 guard SecItemAdd(add as CFDictionary, nil) == errSecSuccess else { throw CopilotError.message(L10n.string("Не удалось сохранить ключ в Связке ключей")) }
             } else if update != errSecSuccess { throw CopilotError.message(L10n.string("Не удалось обновить ключ в Связке ключей")) }
+            }
             keyInput = ""; hasKey = true; status = L10n.string("Ключ сохранён в Связке ключей этого Mac")
         } catch { status = L10n.error(error) }
     }
-    func removeKey() {
-        guard !keyBusy else { return }
-        cancel(); let code = SecItemDelete(keyQuery as CFDictionary)
-        guard code == errSecSuccess || code == errSecItemNotFound else { status = L10n.string("Не удалось удалить ключ из Связки ключей"); return }
-        keyInput = ""; hasKey = false; enabled = false; status = L10n.string("Ключ удалён")
+    func removeKey() async {
+        guard !keyBusy else { return }; keyBusy = true; defer { keyBusy = false }
+        cancel()
+        let service = keyService, query = keyQuery
+        do {
+            try await KeychainAccess.offMain {
+                if service == "ru.axisconsult.copilot.openrouter" { try CredentialVault.remove(.openrouter); return }
+                let code = SecItemDelete(query as CFDictionary)
+                guard code == errSecSuccess || code == errSecItemNotFound else { throw CredentialFailure.storage(code) }
+            }
+            keyInput = ""; hasKey = false; enabled = false; status = L10n.string("Ключ отключён на этом Mac")
+        } catch { status = L10n.error(error) }
     }
     private func request(_ path: String, authenticated: Bool = true) async throws -> URLRequest {
         var r = URLRequest(url: URL(string: "https://openrouter.ai/api/v1/" + path)!)
