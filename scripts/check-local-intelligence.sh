@@ -7,6 +7,10 @@ scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 timeout 90 swiftc -I "$bin/Modules" "$bin"/CopilotCore.build/*.o \
   "$root/Sources/AxisCopilot/Localization.swift" \
+  "$root/Sources/AxisCopilot/KeychainAccess.swift" \
+  "$root/Sources/AxisCopilot/CredentialWire.swift" \
+  "$root/Sources/AxisCopilot/CredentialBridge.swift" \
+  "$root/Sources/AxisCopilot/OpenRouterClient.swift" \
   "$root/Sources/AxisCopilot/IntelligenceSettings.swift" \
   "$root/Sources/AxisCopilot/LocalIntelligence.swift" \
   "$root/Sources/AxisCopilot/GroundedSummaryGenerator.swift" \

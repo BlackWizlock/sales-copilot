@@ -59,3 +59,12 @@
 5. [Форматы файлов](https://apidocs.bitrix24.com/api-reference/files/how-to-upload-files.html).
 
 Проверка вложений использует `disk.file.get` по идентификаторам из `crm.activity.list.FILES`, затем свежий `DOWNLOAD_URL` того же портала без перенаправлений. Браузерная ссылка `crm_show_file.php` проверяет привязку к делу, но не используется для скачивания: с вебхуком она возвращает страницу входа. До намерения записи проверяются scope `crm` и `disk`. После получения ID дела любой отказ сверки сохраняет `needsReconciliation`; повторное создание блокируется. Успех требует совпадения описания, количества, размера и SHA-256 каждого вложения.
+
+
+## Внешний звонок и штатный анализ
+
+Проверено03.11.2026 по официальной документации. Полный цикл внешнего звонка требует установленного OAuth-приложения: `telephony.externalCall.register` и `finish` работают в контексте приложения. Один личный входящий вебхук этот цикл не обеспечивает. [Сценарий интеграции](https://apidocs.bitrix24.ru/tutorials/telephony/index), [обзор телефонии](https://apidocs.bitrix24.ru/api-reference/telephony/index.html).
+
+После завершения зарегистрированного звонка запись WAV/MP3 можно передать через `FILE_CONTENT` или выданный `uploadUrl`; публиковать клиентское аудио по открытому URL не требуется. Текст с временными метками передаётся отдельным `telephony.call.attachTranscription`. Его стороны ограничены `User`/`Client`, поэтому имена трёх участников нельзя обещать сохранить в этом контракте. [Запись](https://apidocs.bitrix24.ru/api-reference/telephony/telephony-external-call-attach-record.html), [расшифровка](https://apidocs.bitrix24.ru/api-reference/telephony/telephony-call-attach-transcription.html).
+
+REST3.0 предоставляет `call.followup.list/get` со scope `call` для чтения уже созданных AI-итогов с проверкой участия пользователя/доступа к чату. Это не доказывает запуск анализа для внешней встречи Zoom/Телемоста или обычного CRM-вложения. Доступность на портале, соответствие идентификаторов разных типов звонка и тариф не проверены. Реализация текущего экспорта остаётся обычным делом встречи; OAuth-приложение и внешняя телефония не регистрировались. [Follow-up](https://apidocs.bitrix24.ru/api-reference/telephony/follow-up/index.html), [получение результата](https://apidocs.bitrix24.ru/api-reference/telephony/follow-up/call-followup-get.html).

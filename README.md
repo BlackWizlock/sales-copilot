@@ -11,7 +11,7 @@ macOS 15 or later, Apple Silicon. Developers need Swift 6 / Command Line Tools
 and Homebrew. End users use the packaged application and download models in its settings.
 
 ```sh
-brew install whisper.cpp coreutils ffmpeg ollama
+brew install whisper.cpp coreutils ffmpeg
 bash scripts/setup-model.sh
 bash scripts/setup-signing.sh
 bash scripts/build-app.sh
@@ -63,9 +63,11 @@ TDT 0.6B v3 and multilingual Whisper models use different local engines. UI
 language and recognition language are separate settings. Russian and English
 resources live under `Resources/*.lproj`.
 
-Meeting notes and sales suggestions use local Ollama inference. Initial downloads
-require internet; downloaded models do not require paid APIs. Optional cloud
-features require separate configuration and do not replace private local inference.
+Meeting summaries, chat and live sales hints use your selected OpenRouter model.
+Enable it in Settings, save your own API key, choose a model and set a daily budget.
+Cloud processing sends meeting text, selected materials and deal context; enable it
+only for data you are allowed to send. Audio stays local. The app never starts or
+downloads a local language model. Recording and ASR work without an API key.
 
 ## Privacy and credentials
 

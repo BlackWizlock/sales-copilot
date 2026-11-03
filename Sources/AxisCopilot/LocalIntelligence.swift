@@ -39,6 +39,7 @@ import CopilotCore
     private var saveSummary: ((MeetingSummary) -> Void)?
 
     func observe(_ session: MeetingSession?, directory: URL?, saveSummary: ((MeetingSummary) -> Void)? = nil) {
+        let completedNow = snapshot != nil && snapshot?.session.id == session?.id && snapshot?.session.state != .completed && session?.state == .completed
         chat.observe(session, directory: directory)
         let changed = snapshot?.session.id != session?.id
         if changed {
@@ -59,7 +60,7 @@ import CopilotCore
         self.saveSummary = saveSummary
         snapshot = session.map(IntelligenceSnapshot.init)
         guard let snapshot else { return }
-        if record.summary?.transcriptFingerprint != snapshot.fingerprint && snapshot.canSummarize && summaryAttempt != snapshot.fingerprint { summarize() }
+        if completedNow && record.summary?.transcriptFingerprint != snapshot.fingerprint && snapshot.canSummarize && summaryAttempt != snapshot.fingerprint { summarize() }
         let latest = TranscriptDeduplicator.visible(snapshot.session.transcript).last(where: { $0.source == .meeting })
         let key = (latest?.id.uuidString ?? "") + (latest?.text ?? "") + record.proposalText + record.dealText
         if key != suggestionAttempt && (session?.state == .recording || session?.state == .processing) { suggest() }
@@ -127,7 +128,7 @@ import CopilotCore
         let meetingID = snapshot.session.id, hash = snapshot.fingerprint
         let summaryModel = runtime.activeModel
         summaryAttempt = hash; busySummary = true; error = ""
-        summaryProgress = L10n.string("Подготовка локальной модели…"); summaryStartedAt = Date()
+        summaryProgress = L10n.string("Подготовка модели…"); summaryStartedAt = Date()
         summaryTask = Task {
             defer { if summaryGeneration == token { busySummary = false; summaryProgress = ""; summaryStartedAt = nil } }
             do {
@@ -149,7 +150,8 @@ import CopilotCore
         }
     }
     func suggest() {
-        guard let snapshot, let latest = TranscriptDeduplicator.visible(snapshot.session.transcript).last(where: { $0.source == .meeting }),
+        guard let snapshot, snapshot.session.state == .recording || snapshot.session.state == .processing,
+              let latest = TranscriptDeduplicator.visible(snapshot.session.transcript).last(where: { $0.source == .meeting }),
               latest.text.count >= 8, !record.proposalText.isEmpty || !record.dealText.isEmpty else { return }
         suggestionTask?.cancel(); generation = UUID(); let token = generation
         let meetingID = snapshot.session.id

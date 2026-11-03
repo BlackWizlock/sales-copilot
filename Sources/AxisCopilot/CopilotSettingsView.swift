@@ -48,9 +48,8 @@ struct CopilotSettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     navigation(L10n.string("Общие"), icon: "gearshape", page: 0)
                     navigation(L10n.string("Распознавание"), icon: "waveform", page: 1)
-                    navigation(L10n.string("Локальный ИИ"), icon: "desktopcomputer", page: 2)
+                    navigation(L10n.string("Модель ИИ"), icon: "cloud", page: 4)
                     navigation(L10n.string("Битрикс24"), icon: "link", page: 3)
-                    navigation("OpenRouter", icon: "cloud", page: 4)
                     navigation(L10n.string("Доступ агентам"), icon: "terminal", page: 5)
                     Spacer()
                 }.padding(16).frame(width: 190).background(Color(nsColor: .windowBackgroundColor))

@@ -652,3 +652,21 @@
 "Ключ отключён на этом Mac" = "Key disabled on this Mac";
 
 "Отключить ключ" = "Disable key";
+
+/* OpenRouter meeting intelligence */
+"Выберите модель" = "Choose a model";
+"Выберите модель OpenRouter в настройках." = "Choose an OpenRouter model in settings.";
+"Выбранная модель готовит резюме, отвечает в чате и подсказывает во время встречи. Распознавание речи работает на Mac." = "The selected model creates summaries, answers meeting questions and provides live hints. Speech recognition runs on your Mac.";
+"Выбранная модель недоступна или не поддерживает структурированные ответы. Обновите каталог и выберите модель." = "The selected model is unavailable or does not support structured responses. Refresh the catalog and choose a model.";
+"Использовать OpenRouter для резюме, чата и подсказок" = "Use OpenRouter for summaries, chat and hints";
+"Материал слишком большой. Разделите встречу или сократите материалы." = "The input is too large. Split the meeting or shorten the supporting materials.";
+"Модель ИИ" = "AI model";
+"Модель не вернула завершённый ответ. Прежний результат сохранён; проверьте модель и лимит." = "The model did not return a complete response. Your previous result is preserved; check the model and token limit.";
+"Подготовка модели…" = "Preparing model…";
+"Подключите модель в настройках OpenRouter для резюме, чата и подсказок." = "Connect a model in OpenRouter settings for summaries, chat and hints.";
+"При включении текст встречи, выбранные материалы и контекст сделки передаются OpenRouter и поставщику модели. Используйте только данные, которые разрешено отправлять. Аудио не отправляется. Оплата по вашему ключу, в пределах дневного бюджета." = "When enabled, meeting text, selected materials and deal context are sent to OpenRouter and the model provider. Use only data you are allowed to send. Audio is not sent. Requests use your API key and daily budget.";
+"Проверка на тестовом вопросе" = "Try a sample question";
+"Укажите дневной бюджет OpenRouter в настройках." = "Set an OpenRouter daily budget in settings.";
+"Модель дважды вернула неверный формат резюме. Повторите запрос или выберите другую модель в настройках. Запись сохранена." = "The model returned an invalid summary format twice. Try again or choose another model in settings. Your recording is preserved.";
+"Учтено за день UTC: $%@. Резюме может включать несколько запросов. При неизвестной стоимости резерв сохраняется." = "Accounted for today (UTC): $%@. A summary may require multiple requests. Unknown charges retain their reservation.";
+"Максимальная оценка тестового запроса: $%@" = "Maximum estimated cost of this sample request: $%@";

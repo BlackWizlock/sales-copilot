@@ -110,6 +110,21 @@ struct AxisCopilotApp: App {
     @MainActor private static var guiLease: GUIInstanceLease?
     @MainActor static func main() async {
         let arguments = CommandLine.arguments
+        // Paid diagnostics share the same settings and ledger as the GUI.
+        // Hold its process lease before constructing any cloud connection.
+        if arguments.contains("--verify-meeting-workflow") || arguments.contains("--verify-sales-hints") {
+            do {
+                guard ProcessInfo.processInfo.environment["AXIS_COPILOT_ALLOW_PAID_SYNTHETIC_TEST"] == "1" else {
+                    throw CopilotError.message("Paid synthetic workflow is opt-in; no model request was sent")
+                }
+                let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                    .appendingPathComponent("AxisSalesCopilot/Instance", isDirectory: true)
+                guard let lease = try GUIInstanceLease.acquire(directory: directory) else {
+                    throw CopilotError.message("Close Axis Copilot before the paid synthetic diagnostic; no model request was sent")
+                }
+                guiLease = lease
+            } catch { fputs("\(error.localizedDescription)\n", stderr); exit(1) }
+        }
         if arguments.contains("--verify-calendar-ui") {
             do { try CalendarUIVerification.run() }
             catch { fputs("\(error.localizedDescription)\n", stderr); exit(1) }
@@ -149,6 +164,11 @@ struct AxisCopilotApp: App {
                 }
                 print("PASS: native voice processing enabled on input/output; automatic gain disabled; client rates match; no capture started")
             } catch { fputs("\(L10n.error(error))\n", stderr); exit(1) }
+            return
+        }
+        if arguments.contains("--verify-meeting-workflow") {
+            do { try await MeetingWorkflowVerification.run() }
+            catch { fputs("\(L10n.error(error))\n", stderr); exit(1) }
             return
         }
         if arguments.contains("--verify-sales-hints") {

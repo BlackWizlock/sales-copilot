@@ -5,11 +5,12 @@
 Axis Copilot is a native Swift/SwiftUI macOS 15+ application. Foundation owns
 storage and networking, ScreenCaptureKit captures application audio, AVFoundation
 captures microphone audio and plays/exports recordings. Whisper.cpp and FluidAudio
-CoreML provide local ASR; FluidAudio also groups voices. Ollama supplies local
-language-model inference. Bitrix24 is an optional user-configured external system.
+CoreML provide local ASR; FluidAudio also groups voices. The user-selected
+OpenRouter model provides summaries, chat and live hints after explicit setup. Bitrix24 is an optional user-configured external system.
 MCP is a local read-only stdio interface with per-meeting access control.
 
-The Mac performs recording, inference, transcription and storage. The VPS serves
+The Mac performs recording, speech recognition, transcription and storage.
+Optional authorized text generation uses OpenRouter; the app ships no Ollama runtime. The VPS serves
 public signed release archives and a small HTTPS update manifest. It does not
 receive recordings, CRM credentials or model prompts. No meeting-processing
 database or inference service is deployed to the VPS.

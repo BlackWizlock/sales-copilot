@@ -3,11 +3,41 @@ import Combine
 import Security
 import CopilotCore
 
+/// Wire contract independent of credentials, preferences and real network access.
+enum OpenRouterCompletion {
+    static func body(model: String, system: String, prompt: String, schema: [String: Any]?, maximumTokens: Int,
+                     prices: (Decimal, Decimal, Decimal)) throws -> Data {
+        let format: [String: Any] = schema.map {
+            ["type": "json_schema", "json_schema": ["name": "meeting_result", "strict": true, "schema": $0]]
+        } ?? ["type": "json_object"]
+        return try JSONSerialization.data(withJSONObject: [
+            "model": model, "messages": [["role": "system", "content": system], ["role": "user", "content": prompt]],
+            "max_tokens": min(4096, max(256, maximumTokens)), "stream": false, "response_format": format,
+            "provider": ["allow_fallbacks": false, "require_parameters": true, "data_collection": "deny",
+                         "max_price": ["prompt": NSDecimalNumber(decimal: prices.0 * 1_000_000),
+                                       "completion": NSDecimalNumber(decimal: prices.1 * 1_000_000),
+                                       "request": NSDecimalNumber(decimal: prices.2)]]])
+    }
+    static func decode(_ data: Data) throws -> String {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any], object["error"] == nil,
+              let choices = object["choices"] as? [[String: Any]], choices.count == 1,
+              choices[0]["finish_reason"] as? String == "stop",
+              let message = choices[0]["message"] as? [String: Any],
+              message["refusal"] == nil || message["refusal"] is NSNull,
+              let content = message["content"] as? String, !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw CopilotError.message(L10n.string("Модель не вернула завершённый ответ. Прежний результат сохранён; проверьте модель и лимит."))
+        }
+        // OpenRouter may return a dated canonical model ID for a selected alias.
+        // Routing is pinned in the request; no model fallback is supplied by this client.
+        return content
+    }
+}
+
 private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
 }
 
-/// Separate synthetic sandbox: this type intentionally has no meeting, CRM or proposal API.
+/// Personal cloud connection shared by meeting intelligence and the synthetic test form.
 @MainActor final class OpenRouterSandbox: ObservableObject {
     static let shared = OpenRouterSandbox()
     struct Model: Decodable, Identifiable {
@@ -55,8 +85,13 @@ private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate
     @Published private(set) var keyBusy = false
     @Published var status = ""
     @Published var models: [Model] = []
-    @Published var selectedModel = ""
-    @Published var budgetText = "0" { didSet { UserDefaults.standard.set(budgetText, forKey: "openRouterDailyBudget") } }
+    @Published var selectedModel = "" {
+        didSet { defaults.set(selectedModel, forKey: "openRouterMeetingModel"); if selectedModel != oldValue { cancelMeetingRequests() } }
+    }
+    @Published var meetingsEnabled = false {
+        didSet { defaults.set(meetingsEnabled, forKey: "openRouterMeetingsEnabled"); if !meetingsEnabled { cancelMeetingRequests() } }
+    }
+    @Published var budgetText = "0" { didSet { defaults.set(budgetText, forKey: "openRouterDailyBudget") } }
     @Published var prompt = ""
     @Published var attested = false
     @Published var reply = ""
@@ -67,16 +102,24 @@ private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate
     private var task: Task<Void, Never>?
     private var generation = UUID()
     private var catalogDate: Date?
+    private var meetingRequests: [UUID: Task<(Data, URLResponse), Error>] = [:]
     private let keyService: String
-    private let network: URLSession = {
+    private let defaults: UserDefaults
+    private let keyReader: (@MainActor () async throws -> String?)?
+    private let network: URLSession
+    private static func makeNetwork() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 90; config.timeoutIntervalForResource = 120
         return URLSession(configuration: config, delegate: OpenRouterRedirectDelegate(), delegateQueue: nil)
-    }()
-    init(keyService: String = "ru.axisconsult.copilot.openrouter") {
+    }
+    init(keyService: String = "ru.axisconsult.copilot.openrouter", defaults: UserDefaults = .standard,
+         network: URLSession? = nil, keyReader: (@MainActor () async throws -> String?)? = nil) {
         self.keyService = keyService
-        budgetText = UserDefaults.standard.string(forKey: "openRouterDailyBudget") ?? "0"
-        if let data = UserDefaults.standard.data(forKey: "openRouterBudgetLedger") {
+        self.defaults = defaults; self.network = network ?? Self.makeNetwork(); self.keyReader = keyReader
+        selectedModel = defaults.string(forKey: "openRouterMeetingModel") ?? ""
+        meetingsEnabled = defaults.bool(forKey: "openRouterMeetingsEnabled")
+        budgetText = defaults.string(forKey: "openRouterDailyBudget") ?? "0"
+        if let data = defaults.data(forKey: "openRouterBudgetLedger") {
             ledger = (try? JSONDecoder().decode(CloudBudgetLedger.self, from: data)) ?? CloudBudgetLedger(day: Self.day, charged: 1_000_000_000)
         } else { ledger = CloudBudgetLedger(day: Self.day) }
         refreshLedger()
@@ -86,10 +129,11 @@ private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate
     }
     private func refreshLedger() {
         chargedText = NSDecimalNumber(decimal: ledger.day == Self.day ? ledger.charged : 0).stringValue
-        if let data = try? JSONEncoder().encode(ledger) { UserDefaults.standard.set(data, forKey: "openRouterBudgetLedger") }
+        if let data = try? JSONEncoder().encode(ledger) { defaults.set(data, forKey: "openRouterBudgetLedger") }
     }
     private var keyQuery: [String: Any] { [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: keyService, kSecAttrAccount as String: "personal"] }
     private func readKey(allowInteraction: Bool = false) async throws -> String? {
+        if let keyReader { return try await keyReader() }
         let service = keyService
         return try await KeychainAccess.offMain {
         func legacy() throws -> Data? {
@@ -146,7 +190,7 @@ private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate
                 let code = SecItemDelete(query as CFDictionary)
                 guard code == errSecSuccess || code == errSecItemNotFound else { throw CredentialFailure.storage(code) }
             }
-            keyInput = ""; hasKey = false; enabled = false; status = L10n.string("Ключ отключён на этом Mac")
+            keyInput = ""; hasKey = false; enabled = false; meetingsEnabled = false; status = L10n.string("Ключ отключён на этом Mac")
         } catch { status = L10n.error(error) }
     }
     private func request(_ path: String, authenticated: Bool = true) async throws -> URLRequest {
@@ -169,7 +213,7 @@ private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate
             let (data, response) = try await network.data(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw CopilotError.message(L10n.string("Каталог моделей недоступен")) }
             models = try Self.decodeCatalog(data)
-            catalogDate = Date(); if !models.contains(where: { $0.id == selectedModel }) { selectedModel = models.first?.id ?? "" }
+            catalogDate = Date()
             status = L10n.format("Каталог загружен: %@ моделей с поддерживаемыми ограниченными ценами. Неподдерживаемые цены исключены. Доступность зависит от аккаунта и поставщика.", String(models.count))
         } catch { status = L10n.error(error) }
     }
@@ -194,6 +238,57 @@ private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate
     var estimateText: String { estimate.map { NSDecimalNumber(decimal: $0).stringValue } ?? L10n.string("неизвестно") }
     func cancel() { task?.cancel(); generation = UUID(); busy = false }
     func contextChanged() { attested = false; cancel() }
+    private func cancelMeetingRequests() { for pending in meetingRequests.values { pending.cancel() } }
+    var meetingModels: [Model] {
+        models.filter { $0.supported_parameters?.contains("response_format") == true && $0.supported_parameters?.contains("structured_outputs") == true }
+    }
+    /// No hidden fallback, model choice or local process. Enable only for data the user may send.
+    func generateMeeting(system: String, prompt: String, schema: [String: Any]?, maximumTokens: Int) async throws -> String {
+        guard meetingsEnabled else { throw CopilotError.message(L10n.string("Подключите модель в настройках OpenRouter для резюме, чата и подсказок.")) }
+        guard !selectedModel.isEmpty else { throw CopilotError.message(L10n.string("Выберите модель OpenRouter в настройках.")) }
+        guard let initialLimit = Decimal(string: budgetText.replacingOccurrences(of: ",", with: ".")), initialLimit > 0, !initialLimit.isNaN else {
+            throw CopilotError.message(L10n.string("Укажите дневной бюджет OpenRouter в настройках."))
+        }
+        if catalogDate.map({ Date().timeIntervalSince($0) >= 3600 }) ?? true { await loadModels() }
+        try Task.checkCancellation()
+        guard meetingsEnabled, let date = catalogDate, Date().timeIntervalSince(date) < 3600,
+              let model = meetingModels.first(where: { $0.id == selectedModel }), let prices = model.safePrices else {
+            throw CopilotError.message(L10n.string("Выбранная модель недоступна или не поддерживает структурированные ответы. Обновите каталог и выберите модель."))
+        }
+        var r = try await request("chat/completions")
+        try Task.checkCancellation()
+        guard meetingsEnabled, selectedModel == model.id,
+              let limit = Decimal(string: budgetText.replacingOccurrences(of: ",", with: ".")) else { throw CancellationError() }
+        let body = try OpenRouterCompletion.body(model: model.id, system: system, prompt: prompt, schema: schema, maximumTokens: maximumTokens, prices: prices)
+        // Byte count includes schema and framing; one byte per token is deliberately conservative.
+        let reserve = (Decimal(body.count + 512) * prices.0 + Decimal(min(4096, max(256, maximumTokens))) * prices.1 + prices.2) * Decimal(string: "1.1")! + Decimal(string: "0.0001")!
+        try ledger.reserve(reserve, limit: limit, day: Self.day); refreshLedger()
+        r.httpMethod = "POST"; r.setValue("application/json", forHTTPHeaderField: "Content-Type"); r.httpBody = body
+        let requestDay = Self.day
+        let requestID = UUID()
+        let pending = Task { try await network.data(for: r) }
+        meetingRequests[requestID] = pending
+        defer { meetingRequests.removeValue(forKey: requestID) }
+        let data: Data, response: URLResponse
+        do {
+            (data, response) = try await withTaskCancellationHandler(operation: { try await pending.value }, onCancel: { pending.cancel() })
+        } catch {
+            if pending.isCancelled || Task.isCancelled { throw CancellationError() }
+            throw error
+        }
+        // Unknown/error/cancelled requests keep their reservation. Never print server response bodies.
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw CopilotError.message(L10n.string("Запрос OpenRouter не выполнен; бюджет остаётся зарезервированным."))
+        }
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let usage = object["usage"] as? [String: Any], let cost = usage["cost"] as? NSNumber,
+           ledger.day == requestDay {
+            ledger.reconcile(reserved: reserve, actual: Decimal(string: cost.stringValue)); refreshLedger()
+        }
+        try Task.checkCancellation()
+        guard !pending.isCancelled, meetingsEnabled, selectedModel == model.id else { throw CancellationError() }
+        return try OpenRouterCompletion.decode(data)
+    }
     func send() {
         guard !busy else { return }
         guard enabled, hasKey, attested, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, prompt.utf8.count <= 12_000 else { status = L10n.string("Включите песочницу и подтвердите синтетический или публичный запрос объёмом до 12 КБ"); return }
@@ -201,6 +296,7 @@ private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate
         do { try ledger.reserve(reserve, limit: limit, day: Self.day); refreshLedger() } catch { status = L10n.error(error); return }
         let token = UUID(); generation = token; busy = true; reply = ""; actualModel = ""
         let question = prompt
+        let requestDay = Self.day
         task = Task {
             defer { if generation == token { busy = false } }
             do {
@@ -216,7 +312,7 @@ private final class OpenRouterRedirectDelegate: NSObject, URLSessionTaskDelegate
                     guard line.hasPrefix("data: "), line != "data: [DONE]", let data = String(line.dropFirst(6)).data(using: .utf8), let event = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
                     if let name = event["model"] as? String { actualModel = name }
                     if let choices = event["choices"] as? [[String: Any]], let delta = choices.first?["delta"] as? [String: Any], let text = delta["content"] as? String { reply += text }
-                    if !reconciled, let usage = event["usage"] as? [String: Any], let cost = usage["cost"] as? NSNumber {
+                    if !reconciled, ledger.day == requestDay, let usage = event["usage"] as? [String: Any], let cost = usage["cost"] as? NSNumber {
                         reconciled = true
                         ledger.reconcile(reserved: reserve, actual: Decimal(string: cost.stringValue)); refreshLedger()
                     }

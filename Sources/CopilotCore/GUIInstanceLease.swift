@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-/// A process-lifetime advisory lock; CLI/MCP entry points do not acquire it.
+/// A process-lifetime advisory lock; paid inference diagnostics also acquire it; read-only CLI/MCP do not.
 public final class GUIInstanceLease {
     private let descriptor: Int32
     private init(_ descriptor: Int32) { self.descriptor = descriptor }

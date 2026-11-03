@@ -28,6 +28,10 @@ bundle_dir="$repo_root/_output/employee-arm64"
 app_path="$bundle_dir/AxisCopilot.app"
 mkdir -p "$bundle_dir"
 ditto "$repo_root/_output/AxisCopilot.app" "$app_path"
+# ditto merges an existing package; remove the retired runtime left by older builds.
+if [[ -d "$app_path/Contents/Resources/Tools/Ollama" ]]; then
+    rm -r -- "$app_path/Contents/Resources/Tools/Ollama"
+fi
 mkdir -p "$app_path/Contents/Resources/Tools" "$app_path/Contents/Resources/Models" "$app_path/Contents/Resources/Licenses"
 cp "$build_dir/bin/whisper-cli" "$app_path/Contents/Resources/Tools/whisper-cli"
 cp "$HOME/Library/Application Support/AxisSalesCopilot/Models/ggml-small.bin" "$app_path/Contents/Resources/Models/ggml-small.bin"

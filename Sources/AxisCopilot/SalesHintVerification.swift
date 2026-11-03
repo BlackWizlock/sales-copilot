@@ -1,9 +1,12 @@
 import Foundation
 import CopilotCore
 
-/// Explicit opt-in synthetic local inference check; never records or reads client meetings.
+/// Explicit opt-in paid synthetic inference check; never records or reads client meetings.
 @MainActor enum SalesHintVerification {
     static func run() async throws {
+        guard ProcessInfo.processInfo.environment["AXIS_COPILOT_ALLOW_PAID_SYNTHETIC_TEST"] == "1" else {
+            throw CopilotError.message("Paid synthetic workflow is opt-in; no model request was sent")
+        }
         let intelligence = LocalIntelligence()
         try intelligence.record.addMaterials([
             SupportMaterial(name: "scope.txt", text: "Обучение команды входит в объём работ."),

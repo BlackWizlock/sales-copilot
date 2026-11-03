@@ -33,6 +33,9 @@ done
 mkdir -p "$app_path/Contents/Resources/Tools"
 swiftc -O -target arm64-apple-macosx15.0 "$repo_root/Sources/AxisCopilot/UpdateSupport.swift" "$repo_root/scripts/UpdateHelper.swift" -o "$app_path/Contents/Resources/Tools/AxisUpdater"
 timeout 90 swiftc -O -target arm64-apple-macosx15.0 "$repo_root/Sources/AxisCopilot/CredentialWire.swift" "$repo_root/scripts/CredentialHelper.swift" -o "$app_path/Contents/Resources/Tools/AxisCredentials"
-bash "$repo_root/scripts/setup-intelligence.sh" "$app_path"
+# Language generation uses the user's OpenRouter connection; ship no Ollama runtime.
+if [[ -d "$app_path/Contents/Resources/Tools/Ollama" ]]; then
+    rm -r -- "$app_path/Contents/Resources/Tools/Ollama"
+fi
 bash "$repo_root/scripts/sign-app.sh" "$app_path"
 printf '%s\n' "$app_path"

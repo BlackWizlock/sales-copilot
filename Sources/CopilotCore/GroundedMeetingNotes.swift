@@ -20,6 +20,7 @@ public struct GroundedMeetingNotes: Codable {
             public var sourceIDs: [Int]
         }
         public var facts: [Entry]
+        public init(facts: [Entry]) { self.facts = facts }
 
         public func grounded(in lines: [TranscriptLine], allowedSourceIDs: Set<Int>? = nil) -> GroundedMeetingNotes {
             GroundedMeetingNotes(facts: facts.map { entry in
@@ -35,10 +36,31 @@ public struct GroundedMeetingNotes: Codable {
         }
     }
     public struct Audit: Codable {
-        public struct Verdict: Codable { public var index: Int; public var supported: Bool; public var kind: Kind }
+        public struct Verdict: Codable {
+            public var index: Int
+            public var supported: Bool
+            public var kind: Kind
+            public var owner: String?
+            public var deadline: String?
+        }
         public var verdicts: [Verdict]
     }
     public var facts: [Fact]
+
+    /// High-precision coverage of literal, standalone Russian agreements.
+    /// These remain candidates and undergo the same independent audit as model facts.
+    public static func explicitDecisions(in lines: [TranscriptLine], allowedSourceIDs: Set<Int>) -> GroundedMeetingNotes {
+        let facts = lines.indices.filter { allowedSourceIDs.contains($0) }.compactMap { index -> Fact? in
+            let line = lines[index]
+            let text = line.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard text.count <= 240, isSingleDecision(text),
+                  text.rangeOfCharacter(from: CharacterSet(charactersIn: ",;:")) == nil,
+                  text.range(of: "^(?:мы\\s+)?(?:договорились|согласовали|решили)\\b", options: [.regularExpression, .caseInsensitive]) != nil else { return nil }
+            return Fact(kind: .decision, text: text, owner: "", deadline: "",
+                        evidence: [.init(segmentID: line.id, quote: line.text)])
+        }
+        return GroundedMeetingNotes(facts: facts)
+    }
 
     public func validated(in lines: [TranscriptLine], audit: Audit) -> GroundedMeetingNotes {
         var result: [Fact] = []
@@ -58,21 +80,62 @@ public struct GroundedMeetingNotes: Codable {
             let evidence = sources.joined(separator: "\n")
             guard GroundedAnswer.validated(text: original.text, evidence: evidence) != nil else { continue }
             var fact = original
-            // An audit may downgrade a commitment to a topic, never promote one.
+            // Reclassify an already proposed commitment, but never promote topics
+            // or questions into obligations. The source still has to prove its status.
             if verdict.kind != original.kind {
-                guard verdict.kind == .topic else { continue }
-                fact.kind = .topic
+                let commitments: Set<Kind> = [.action, .decision]
+                guard verdict.kind == .topic ||
+                    (commitments.contains(original.kind) && commitments.contains(verdict.kind)) else { continue }
+                fact.kind = verdict.kind
+            }
+            if (fact.kind == .action || fact.kind == .decision) && sources.count == 1 && Self.isSingleDecision(original.text) && Self.hasExplicitDecision(evidence) {
+                fact.kind = .decision
+            }
+            if fact.kind == .decision {
+                let mutualAgreement = Self.hasExplicitDecision(evidence)
+                let directAcceptance = sources.count >= 2 && sources.contains {
+                    ["да", "да.", "yes", "yes."].contains($0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+                }
+                guard mutualAgreement || directAcceptance else { continue }
             }
             // A permissive model audit is insufficient to create a commitment.
             // Prefer omitting an uncertain task to assigning one from discussion.
             if fact.kind == .action || fact.kind == .decision {
                 guard Self.hasExplicitCommitment(evidence) else { continue }
             }
-            fact.owner = fact.kind == .action && !fact.owner.isEmpty && evidence.contains(fact.owner) ? fact.owner : ""
-            fact.deadline = fact.kind == .action && !fact.deadline.isEmpty && evidence.contains(fact.deadline) ? fact.deadline : ""
+            let owner = verdict.owner ?? fact.owner
+            var deadline = verdict.deadline ?? fact.deadline
+            if (deadline.isEmpty || !evidence.contains(deadline)) && fact.kind == .action && sources.count == 1 {
+                deadline = Self.singleExplicitDeadline(original.text) ?? ""
+            }
+            fact.owner = fact.kind == .action && !owner.isEmpty && evidence.contains(owner) ? owner : ""
+            fact.deadline = fact.kind == .action && !deadline.isEmpty && evidence.contains(deadline) ? deadline : ""
             result.append(fact)
         }
         return GroundedMeetingNotes(facts: result)
+    }
+
+    private static func isSingleDecision(_ evidence: String) -> Bool {
+        let sentences = evidence.components(separatedBy: CharacterSet(charactersIn: ".!?\n"))
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        return sentences.count == 1 && hasExplicitDecision(evidence)
+    }
+
+    private static func hasExplicitDecision(_ evidence: String) -> Bool {
+        evidence.components(separatedBy: CharacterSet(charactersIn: ".!?\n")).contains { raw in
+            let sentence = raw.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !evidence.contains(raw + "?"),
+                  sentence.range(of: "\\b(не|нет|not|never|прошл\\p{L}*|раньше|вчера|тогда|previously|yesterday)\\b", options: .regularExpression) == nil else { return false }
+            return sentence.range(of: "\\b(договорились|согласовали|решили|подтверждаю|согласен|согласна|согласован[аоы]?|agreed|confirmed)\\b", options: .regularExpression) != nil
+        }
+    }
+
+    private static func singleExplicitDeadline(_ evidence: String) -> String? {
+        let pattern = "\\b(?:в\\s+(?:понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)|до\\s+(?:понедельника|вторника|среды|четверга|пятницы|субботы|воскресенья)|к\\s+(?:понедельнику|вторнику|среде|четвергу|пятнице|субботе|воскресенью)|сегодня|завтра|послезавтра)\\b"
+        guard let parser = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
+        let matches = parser.matches(in: evidence, range: NSRange(evidence.startIndex..., in: evidence))
+        guard matches.count == 1, let match = matches.first, let range = Range(match.range, in: evidence) else { return nil }
+        return String(evidence[range])
     }
 
     private static func hasExplicitCommitment(_ evidence: String) -> Bool {
@@ -83,9 +146,16 @@ public struct GroundedMeetingNotes: Codable {
             guard let range = Range(match.range, in: evidence) else { return false }
             let sentence = String(evidence[range]).lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
             guard !sentence.hasSuffix("?"),
-                  sentence.range(of: "\\b(прошл\\p{L}*|раньше|вчера|тогда|previously|yesterday)\\b", options: .regularExpression) == nil,
+                  sentence.range(of: "\\b(прошл\\p{L}*|раньше|вчера|previously|yesterday)\\b", options: .regularExpression) == nil,
                   sentence.range(of: "\\b(не|нет|not|never|didn't|won't)\\b", options: .regularExpression) == nil else { return false }
-            return sentence.range(of: "\\b(договорились|согласовали|подтверждаю|согласен|согласна|беру|отправлю|пришлю|сделаю|подготовлю|добавлю|внесу|проверю|agreed|confirmed)\\b|\\bi (will|'ll)\\b", options: .regularExpression) != nil || sentence == "да" || sentence == "да." || sentence == "yes" || sentence == "yes."
+            // Тогда can mean "in that case" in a current promise. Require an
+            // explicit first-person future form rather than treating past agreement
+            // ("тогда договорились") as a new assignment.
+            let future = "(?:отправлю|пришлю|сделаю|подготовлю|добавлю|внесу|проверю|пробью|уточню|свяжусь|узнаю|организую|согласую|запрошу)"
+            let firstPersonFuture = sentence.range(of: "^(?:(?:да|окей|хорошо|ладно)[,;:]?\\s+)*(?:тогда\\s+)?я\\s+(?:тогда\\s+)?" + future + "\\b", options: .regularExpression) != nil
+            if sentence.range(of: "\\bтогда\\b", options: .regularExpression) != nil { return firstPersonFuture }
+            if firstPersonFuture { return true }
+            return sentence.range(of: "\\b(договорились|согласовали|решили|подтверждаю|согласен|согласна|беру|отправлю|пришлю|сделаю|подготовлю|добавлю|внесу|проверю|agreed|confirmed)\\b|\\bi (will|'ll)\\b", options: .regularExpression) != nil || sentence == "да" || sentence == "да." || sentence == "yes" || sentence == "yes."
         }
     }
 
@@ -97,7 +167,12 @@ public struct GroundedMeetingNotes: Codable {
         var positions: [Identity: Int] = [:]
         var facts: [Fact] = []
         for fact in batches.flatMap(\.facts) {
-            let key = Identity(kind: fact.kind.rawValue, text: normalized(fact.text),
+            var text = normalized(fact.text)
+            if fact.kind == .decision {
+                text = text.trimmingCharacters(in: .punctuationCharacters)
+                    .replacingOccurrences(of: "^(?:мы\\s+)?(?:договорились|согласовали|решили)\\s+", with: "", options: .regularExpression)
+            }
+            let key = Identity(kind: fact.kind.rawValue, text: text,
                                owner: normalized(fact.owner), deadline: normalized(fact.deadline))
             if let index = positions[key] {
                 for citation in fact.evidence where !facts[index].evidence.contains(where: {
