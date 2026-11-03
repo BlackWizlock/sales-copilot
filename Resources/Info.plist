@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AxisUpdateFeedURL</key>
+	<string>https://updates.axisconsult.ru/copilot/alpha/latest.json</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Axis Copilot</string>
+	<key>CFBundleExecutable</key>
+	<string>AxisCopilot</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon.icns</string>
+	<key>CFBundleIdentifier</key>
+	<string>ru.axisconsult.SalesCopilot</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ru</string>
+	</array>
+	<key>CFBundleName</key>
+	<string>Axis Copilot</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.4.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>ru.axisconsult.SalesCopilot.deal</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>axis-copilot</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>20</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>15.0</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Для записи собеседников в Zoom или Телемосте и локальной транскрипции встречи.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Axis Copilot records your microphone only when you start a meeting. Audio is processed on this Mac.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>Нужен доступ к системному звуку выбранного приложения. Видео экрана не сохраняется.</string>
+</dict>
+</plist>

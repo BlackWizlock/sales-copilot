@@ -1,0 +1,18 @@
+# Static update artifacts only. No application secrets, audio or CRM data.
+updates.axisconsult.ru {
+    encode gzip zstd
+    header {
+        X-Content-Type-Options nosniff
+        X-Robots-Tag "noindex, nofollow"
+        -Server
+    }
+    @copilot path /copilot/*
+    handle @copilot {
+        root * /usr/share/caddy
+        header Cache-Control "no-cache"
+        file_server
+    }
+    handle {
+        respond "Not found" 404
+    }
+}
