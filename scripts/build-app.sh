@@ -4,7 +4,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 build_args=(--build-system native -c release)
 if [[ -n "${AXIS_SWIFT_SCRATCH_PATH:-}" ]]; then build_args+=(--scratch-path "$AXIS_SWIFT_SCRATCH_PATH"); fi
-timeout 240 swift build "${build_args[@]}" --product AxisCopilot
+timeout 600 swift build "${build_args[@]}" --product AxisCopilot
 bin_dir="$(swift build "${build_args[@]}" --show-bin-path 2>/dev/null)"
 app_path="${AXIS_APP_OUTPUT:-$repo_root/_output/AxisCopilot.app}"
 mkdir -p "$app_path/Contents/MacOS" "$app_path/Contents/Resources"

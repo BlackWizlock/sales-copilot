@@ -210,10 +210,10 @@ actor BitrixClient {
         let rows = try await list("crm.activity.list", ["filter": .object(["ID": .string(activityID)]), "select": .array([.string("ID"), .string("FILES")])])
         guard rows.count == 1, rows[0]["ID"]?.text == activityID else { throw BitrixFailure.malformed }
         let files = rows[0]["FILES"]?.array ?? []
-        var expected = [CRMExportPreview.sha256(Data(operation.preview.transcript.utf8))]
+        var expected = [(hash: CRMExportPreview.sha256(Data(operation.preview.transcript.utf8)), bytes: Data(operation.preview.transcript.utf8).count)]
         if operation.preview.audioName != nil {
             guard let audioHash = operation.preview.audioSHA256 else { throw BitrixFailure.malformed }
-            expected.append(audioHash)
+            expected.append((hash: audioHash, bytes: operation.preview.audioBytes))
         }
         guard files.count == expected.count else { throw BitrixFailure.malformed }
         for file in files {
@@ -231,8 +231,6 @@ actor BitrixClient {
             // its activity binding, but cannot authenticate a machine download with a webhook.
             let disk = try await call("disk.file.get", ["id": .string(fileID)])["result"]?.object ?? [:]
             guard disk["ID"]?.text == fileID, disk["TYPE"]?.text == "file",
-                  let name = disk["NAME"]?.text,
-                  name == "transcript.txt" || name == operation.preview.audioName,
                   let sizeText = disk["SIZE"]?.text, let size = Int(sizeText), size >= 0, size <= 50 * 1024 * 1024,
                   let machineRaw = disk["DOWNLOAD_URL"]?.text,
                   let machine = URLComponents(string: machineRaw),
@@ -242,8 +240,9 @@ actor BitrixClient {
                   machine.path == "/rest/download.json" || machine.path.range(of: "^/rest/[0-9]+/[A-Za-z0-9_-]+/download/?$", options: .regularExpression) != nil,
                   let downloadURL = machine.url,
                   machine.queryItems?.contains(where: { $0.name == "token" && !($0.value ?? "").isEmpty }) == true else { throw BitrixFailure.malformed }
-            let expectedSize = name == "transcript.txt" ? Data(operation.preview.transcript.utf8).count : operation.preview.audioBytes
-            guard size == expectedSize else { throw BitrixFailure.malformed }
+            // Drive may rename collisions (e.g. transcript (1).txt). Names are
+            // display metadata; activity binding and exact bytes establish identity.
+            guard expected.contains(where: { $0.bytes == size }) else { throw BitrixFailure.malformed }
             var request = URLRequest(url: downloadURL); request.httpMethod = "GET"
             request.setValue("AxisCopilot/1.0", forHTTPHeaderField: "User-Agent")
             request.setValue("*/*", forHTTPHeaderField: "Accept")
@@ -253,7 +252,7 @@ actor BitrixClient {
             catch is CancellationError { throw CancellationError() }
             catch { throw BitrixFailure.network }
             guard status == 200, data.count == size,
-                  let index = expected.firstIndex(of: CRMExportPreview.sha256(data)) else { throw BitrixFailure.malformed }
+                  let index = expected.firstIndex(where: { $0.bytes == size && $0.hash == CRMExportPreview.sha256(data) }) else { throw BitrixFailure.malformed }
             expected.remove(at: index)
         }
         guard expected.isEmpty else { throw BitrixFailure.malformed }

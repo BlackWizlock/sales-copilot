@@ -226,7 +226,12 @@ import CopilotCore
                 if isCurrent() { exportOperation = operation; preview = nil }
                 throw error
             }
-        } catch { if isCurrent() { self.error = L10n.error(error) } }
+        } catch {
+            if isCurrent() {
+                preview = nil
+                self.error = L10n.error(error)
+            }
+        }
     }
     func reconcile(meetingID: UUID) async {
         guard !busy, activeMeetingID == meetingID, let client else { return }

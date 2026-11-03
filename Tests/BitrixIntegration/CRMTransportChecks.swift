@@ -5,6 +5,8 @@ actor SyntheticBitrix: BitrixTransport {
     var timeoutOnWrite = true
     var omitFiles = false
     var corruptFiles = false
+    var renamedFiles = false
+    func serverRenamesFiles() { timeoutOnWrite = false; renamedFiles = true }
     func successfulWriteWithWrongFiles() { timeoutOnWrite = false; corruptFiles = true }
     func successfulWrite() { timeoutOnWrite = false }
     func successfulWriteWithoutFiles() { timeoutOnWrite = false; omitFiles = true }
@@ -46,8 +48,10 @@ actor SyntheticBitrix: BitrixTransport {
             if denyFileRead { return (Data(#"{"error":"ACCESS_DENIED"}"#.utf8), 403) }
             let id = params["id"]!.text, index = Int(id)! - 601
             let file = savedFields["FILES"]!.array[index].object["fileData"]!.array
+            let originalName = file[0].text as NSString
+            let returnedName: CRMValue = renamedFiles ? .string(originalName.deletingPathExtension + " (1)." + originalName.pathExtension) : file[0]
             let host = hostileDownload ? "external.invalid" : "axisconsult.bitrix24.ru"
-            let result: CRMValue = .object(["ID": .string(id), "TYPE": .string("file"), "NAME": file[0], "SIZE": .number(Double(Data(base64Encoded: file[1].text)!.count)), "DOWNLOAD_URL": .string("https://\(host)/rest/1/synthetic/download/?token=\(id)")])
+            let result: CRMValue = .object(["ID": .string(id), "TYPE": .string("file"), "NAME": returnedName, "SIZE": .number(Double(Data(base64Encoded: file[1].text)!.count)), "DOWNLOAD_URL": .string("https://\(host)/rest/1/synthetic/download/?token=\(id)")])
             return (try JSONEncoder().encode(["result": result]), 200)
         }
         if let result = fixtures[method] { return (try JSONEncoder().encode(["result": result]), 200) }
@@ -190,6 +194,16 @@ struct SyntheticFailureBitrix: BitrixTransport {
         let legacyDownloads = await audioTransport.legacyDownloads
         precondition(legacyDownloads == 0, "Browser attachment URLs must never be used for machine verification")
         print("PASS: selected-deal export contains exact transcript/audio payload and is completed only after read-back; repeat refused")
+        var renamedSession = try store.create(title: "Server duplicate filenames")
+        renamedSession.state = .completed; renamedSession.transcript = session.transcript
+        try journal.bind(context, meetingID: renamedSession.id)
+        let renamedServer = SyntheticBitrix(); await renamedServer.serverRenamesFiles()
+        let renamed = CRMController(store: store, client: BitrixClient(credentials: credentials, transport: renamedServer), ownerID: "1")
+        renamed.activate(session: renamedSession)
+        renamed.prepareExport(session: renamedSession, summary: "Synthetic", audioURL: audioURL)
+        await renamed.confirmExport(session: renamedSession, summary: "Synthetic", audioURL: audioURL)
+        precondition(renamed.exportOperation?.state == .completed, "Bitrix filename disambiguation must not reject identical attached bytes")
+        print("PASS: server-renamed attachments are verified by exact bytes and activity binding")
         // An API ID alone does not prove attached transcript/audio were saved.
         var missingFilesSession = try store.create(title: "Missing server attachments")
         missingFilesSession.state = .completed
@@ -232,6 +246,7 @@ struct SyntheticFailureBitrix: BitrixTransport {
             if mode == "missingScope" {
                 let operation = try journal.operation(meetingID: probe.id)
                 precondition(count == 0 && operation == nil, "Missing disk scope must fail before write intent")
+                precondition(checker.preview == nil && checker.error != nil, "Preflight error must dismiss the confirmation sheet so its message is visible")
             } else {
                 precondition(count == 1 && checker.exportOperation?.state == .needsReconciliation, "Failed read-back after a successful create must block repeat")
                 checker.prepareExport(session: probe, summary: "Synthetic", audioURL: nil)
