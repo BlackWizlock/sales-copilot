@@ -4,6 +4,9 @@ import CopilotCore
 actor DelayedCRMTransport: BitrixTransport {
     let methodToPause: String
     let foundID: String?
+    var marker = ""
+    private var didPause = false
+    func setMarker(_ value: String) { marker = value }
     private var releaseGate: CheckedContinuation<Void, Never>?
     private var waiting: [CheckedContinuation<Void, Never>] = []
     init(methodToPause: String, foundID: String?) { self.methodToPause = methodToPause; self.foundID = foundID }
@@ -14,13 +17,19 @@ actor DelayedCRMTransport: BitrixTransport {
     func release() { releaseGate?.resume(); releaseGate = nil }
     func send(_ request: URLRequest) async throws -> (Data, Int) {
         let method = request.url!.lastPathComponent
-        if method == methodToPause {
+        if method == methodToPause && !didPause {
+            didPause = true
             await withCheckedContinuation { gate in
                 releaseGate = gate; waiting.forEach { $0.resume() }; waiting = []
             }
         }
+        if method == "crm_show_file.php" { return (Data("[0.0] Звук встречи: Synthetic text".utf8), 200) }
         if method == "crm.activity.add.json" { throw URLError(.timedOut) }
-        let rows: [CRMValue] = foundID.map { [.object(["ID": .string($0)])] } ?? []
+        if method == "crm.activity.get.json", let foundID {
+            let fields: [String: CRMValue] = ["ID": .string(foundID), "OWNER_TYPE_ID": .string("2"), "OWNER_ID": .string("999"), "ORIGINATOR_ID": .string("AXIS_COPILOT"), "ORIGIN_ID": .string(marker), "DESCRIPTION": .string("Summary A\n\nТранскрипция во вложении.\nID экспорта: " + marker), "COMPLETED": .string("Y"), "FILES": .array([.string("601")])]
+            return (try JSONEncoder().encode(["result": CRMValue.object(fields)]), 200)
+        }
+        let rows: [CRMValue] = foundID.map { [.object(["ID": .string($0), "FILES": .array([.object(["id": .string("601"), "url": .string("https://synthetic.bitrix24.ru/bitrix/tools/crm_show_file.php?fileId=601&ownerTypeId=6&ownerId=777&auth=synthetic")])])])] } ?? []
         return (try JSONEncoder().encode(["result": CRMValue.array(rows)]), 200)
     }
 }
@@ -56,6 +65,7 @@ actor DelayedCRMTransport: BitrixTransport {
         precondition(persistedA?.state == .needsReconciliation)
 
         let reconcileTransport = DelayedCRMTransport(methodToPause: "crm.activity.list.json", foundID: "777")
+        await reconcileTransport.setMarker("axis-copilot-" + a.id.uuidString.lowercased())
         let reconciling = CRMController(store: store, client: BitrixClient(credentials: credentials, transport: reconcileTransport), ownerID: "1")
         reconciling.activate(session: a)
         let task = Task { await reconciling.reconcile(meetingID: a.id) }

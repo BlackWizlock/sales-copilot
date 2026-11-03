@@ -9,6 +9,7 @@ timeout 90 swiftc -I "$bin/Modules" "$bin"/CopilotCore.build/*.o \
   "$root/Sources/AxisCopilot/Localization.swift" \
   "$root/Sources/AxisCopilot/IntelligenceSettings.swift" \
   "$root/Sources/AxisCopilot/LocalIntelligence.swift" \
+  "$root/Sources/AxisCopilot/GroundedSummaryGenerator.swift" \
   "$root/Sources/AxisCopilot/MeetingChatController.swift" \
   "$root/Sources/AxisCopilot/MaterialTextExtractor.swift" \
   "$root/Tests/Integration/LocalGenerationChecks.swift" -o "$scratch/checks"

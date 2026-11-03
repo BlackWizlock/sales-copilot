@@ -12,6 +12,7 @@ public struct CRMExportPreview: Codable, Equatable, Sendable {
     public var summary: String
     public var transcript: String
     public var audioName: String?
+    public var audioSHA256: String?
     public var audioBytes: Int
     public var fingerprint: String
     public init(session: MeetingSession, context: DealContext, summary: String, audioURL: URL?) throws {
@@ -23,6 +24,7 @@ public struct CRMExportPreview: Codable, Equatable, Sendable {
         started = session.created; ended = session.ended ?? session.created
         self.summary = summary; transcript = Self.transcriptText(session)
         audioName = audioURL?.lastPathComponent; audioBytes = audio?.count ?? 0
+        audioSHA256 = audio.map { Self.sha256($0) }
         fingerprint = Self.digest(session: session, summary: summary, audio: audio)
     }
     public func matches(session: MeetingSession, summary: String, audioURL: URL?) throws -> Bool {
@@ -30,13 +32,17 @@ public struct CRMExportPreview: Codable, Equatable, Sendable {
         return meetingID == session.id && fingerprint == Self.digest(session: session, summary: summary, audio: audio)
     }
     public static func transcriptText(_ session: MeetingSession) -> String {
-        session.transcript.sorted { $0.start < $1.start }.map { line in
-            "[\(String(format: "%.1f", line.start))] \(line.source.title): \(line.text)"
+        TranscriptDeduplicator.visible(session.transcript).map { line in
+            let name = session.speakerID(for: line).flatMap { id in session.speakers?.first { $0.id == id }?.name }
+            return "[\(String(format: "%.1f", line.start))] \(name ?? line.source.title): \(line.text)"
         }.joined(separator: "\n")
     }
     private static func digest(session: MeetingSession, summary: String, audio: Data?) -> String {
         let payload = [session.id.uuidString, session.title, String(session.created.timeIntervalSince1970), String((session.ended ?? session.created).timeIntervalSince1970), summary, transcriptText(session), audio.map { SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined() } ?? "no-audio"].joined(separator: "\u{0}")
         return SHA256.hash(data: Data(payload.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+    public static func sha256(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
     public static func audioData(_ url: URL?) throws -> Data? {
         guard let url else { return nil }
@@ -56,6 +62,7 @@ public struct CRMExport: Codable, Equatable, Sendable {
     public var activityID: String?
     public var updated: Date
     public init(preview: CRMExportPreview) { operationID = UUID(); self.preview = preview; state = .prepared; updated = Date() }
+    public var activityDescription: String { preview.summary + "\n\nТранскрипция во вложении.\nID экспорта: " + marker }
     public var marker: String { "axis-copilot-\(preview.meetingID.uuidString.lowercased())" }
     public var resultURL: URL? {
         guard activityID != nil else { return nil }

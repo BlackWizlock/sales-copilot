@@ -587,3 +587,8 @@
 "Локальная модель дважды вернула неверный формат резюме. Повторите запрос или выберите другую модель в настройках. Запись сохранена." = "The local model returned an invalid summary format twice. Retry or select another model in Settings. Your recording is saved.";
 
 "Исправляю формат ответа модели…" = "Correcting the model response format…";
+"Проверка выводов: часть %@ из %@" = "Checking conclusions: part %@ of %@";
+"Не удалось подтвердить факты резюме. Запись и прежнее резюме сохранены." = "Could not verify the meeting notes. The recording and previous summary are preserved.";
+"Дело найдено, но итоги или вложения ещё не подтверждены. Повторная отправка отключена; сверьте результат позже." = "The activity exists, but its notes or attachments are not confirmed yet. Resending is disabled; reconcile again later.";
+"Встреча изменилась. Откройте отправку заново." = "The meeting changed. Reopen export.";
+"Подготовка записи…" = "Preparing recording…";

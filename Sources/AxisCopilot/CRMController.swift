@@ -194,7 +194,9 @@ import CopilotCore
             var operation = CRMExport(preview: p)
             try journal.save(operation) // Persist intent before the first network call.
             if let existing = try await client.findExport(operation) {
-                operation.activityID = existing; operation.state = .completed; try journal.save(operation)
+                operation.activityID = existing; operation.state = .needsReconciliation; try journal.save(operation)
+                try await client.verifyExport(operation, activityID: existing)
+                operation.state = .completed; try journal.save(operation)
                 if isCurrent() { exportOperation = operation; preview = nil; error = nil }
                 return
             }
@@ -202,6 +204,8 @@ import CopilotCore
             operation.state = .sending; try journal.save(operation)
             do {
                 operation.activityID = try await client.createMeeting(operation, context: bound, audio: audio)
+                try journal.save(operation)
+                try await client.verifyExport(operation, activityID: operation.activityID!)
                 operation.state = .completed; operation.updated = Date(); try journal.save(operation)
                 if isCurrent() { exportOperation = operation; preview = nil; error = nil }
             } catch {
@@ -224,7 +228,9 @@ import CopilotCore
             let journal = try requireJournal()
             guard var operation = try journal.operation(meetingID: meetingID) else { return }
             if let id = try await client.findExport(operation) {
-                operation.activityID = id; operation.state = .completed; operation.updated = Date()
+                operation.activityID = id; operation.state = .needsReconciliation; try journal.save(operation)
+                try await client.verifyExport(operation, activityID: id)
+                operation.state = .completed; operation.updated = Date()
                 try journal.save(operation)
                 if isCurrent() { exportOperation = operation; error = nil }
             } else {

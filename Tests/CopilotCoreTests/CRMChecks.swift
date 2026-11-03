@@ -39,6 +39,15 @@ final class CRMChecks {
         precondition(recovered?.state == .needsReconciliation)
         let permissions = try FileManager.default.attributesOfItem(atPath: root.path)[.posixPermissions] as? Int
         precondition(permissions == 0o700)
+        var named = MeetingSession(title: "Named transcript")
+        let remote = TranscriptLine(source: .meeting, start: 1, end: 3, text: "Обсудим условия договора")
+        let echo = TranscriptLine(source: .microphone, start: 1.1, end: 3.1, text: remote.text)
+        named.transcript = [echo, remote]
+        named.speakers = [SpeakerProfile(id: "client", name: "Анна")]
+        named.setSpeakerOverride(phraseID: remote.id, speakerID: "client")
+        let exported = CRMExportPreview.transcriptText(named)
+        precondition(exported.components(separatedBy: remote.text).count == 2, "CRM transcript must not repeat cross-source echo")
+        precondition(exported.contains("Анна"), "CRM transcript must retain assigned speaker names")
         print("PASS: CRM core contracts")
     }
 }

@@ -114,3 +114,11 @@ Build8 capture follow-up: owner granted microphone permission. Two native starts
 На установленной11 запись PR дважды завершалась общей ошибкой формата. Два последующих диагностических прогона того же текста через локальный код и контроллер завершились успешно, поэтому точная причина прежнего ответа не установлена. Содержимое записи не отправлялось наружу и не сохранялось в диагностические логи.
 
 Новые синтетические проверки production-runtime и контроллера подтверждают отказ незавершённому ответу, восстановление после неверного JSON за одну повторную попытку, ограничение повторов с сохранением прежнего резюме и отмену до начала генерации. Регрессия повторной попытки дала FAIL до исправления; удаление done/done_reason guard также даёт FAIL. Нативный проход12 и чистый checkout фиксируются после выполнения; тесты не заменяют проверку реальной модели.
+
+## Build13, 2026-11-03
+
+Full local CI after independent-review fixes exited0. The semantic summary pipeline rejects a fabricated decision with unrelated evidence, checks the exact quoted text, refuses incomplete two-fact audits, preserves the previous result on failure and checks owner/deadline/numbers separately. Each reported regression failed before its fix.
+
+Actual local model on ten synthetic objections passed; hint latency from a ready transcript p50=1.461s/p95=5.189s. Proposal/negation summary test, exact quotations and reload passed. This is not live audio latency.
+
+CRM transport covers read-back of deal/marker/description/status and downloaded content SHA-256. Same-count replacement attachments are rejected; ambiguous writes reconcile without another create. Export includes exact transcript/audio bytes; CoreChecks verifies dedup and manually assigned names. Transport fixtures use synthetic M4A header bytes to test payload integrity, not codec validity. Real AAC/ASR/export is tested separately by full CI:19.04s archive,1.16s processing/export. Native automatic assembly, real-PR summary, actual CRM files and public channel are recorded only after observation below.

@@ -114,6 +114,9 @@ def inventory():
                 else:
                     preserved['core error parsing markers'] += 1
                 continue
+            if path.name == 'GroundedSummaryGenerator.swift' and line.lstrip().startswith('system:'):
+                preserved['Russian model prompt/schema/matching rule'] += 1
+                continue
             if any(marker in line for marker in ('let system =', 'generate(system:', 'let schema:', 'let needsHelp =', 'var chunks = IntelligenceContext.batches')):
                 preserved['Russian model prompt/schema/matching rule'] += 1
                 continue

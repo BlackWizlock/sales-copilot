@@ -187,7 +187,8 @@ struct MeetingView: View {
             Divider()
             if let crm = model.crm {
                 CRMPanel(controller: crm, session: model.current, summaryText: model.intelligence.summaryText,
-                         audioURL: model.current.flatMap { try? model.store?.fileURL($0.id, filename: "meeting.m4a") },
+                         audioURL: model.recordingURL,
+                         prepareAudio: { try await model.prepareRecordingForCRM() },
                          onContextChanged: { text in
                              guard model.intelligence.record.dealText != text else { return }
                              model.intelligence.record.dealText = text; model.intelligence.updateContext()

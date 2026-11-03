@@ -178,11 +178,54 @@ actor BitrixClient {
             "START_TIME": .string(iso.string(from: p.started)), "END_TIME": .string(iso.string(from: p.ended)), "COMPLETED": .string("Y"),
             "RESPONSIBLE_ID": context.fields["ASSIGNED_BY_ID"] ?? .string(credentials.userID),
             "COMMUNICATIONS": .array([.object(["ENTITY_ID": .string(entityID), "ENTITY_TYPE_ID": .number(entityType), "VALUE": .string("")])]),
-            "DESCRIPTION": .string(p.summary + "\n\nТранскрипция во вложении.\nID экспорта: " + operation.marker), "DESCRIPTION_TYPE": .number(1),
+            "DESCRIPTION": .string(operation.activityDescription), "DESCRIPTION_TYPE": .number(1),
             "ORIGINATOR_ID": .string("AXIS_COPILOT"), "ORIGIN_ID": .string(operation.marker), "FILES": .array(files)
         ])])
         guard let id = result["result"]?.text, Int(id).map({ $0 > 0 }) == true else { throw BitrixFailure.malformed }
         return id
+    }
+    /// A successful write response alone does not prove the meeting's content was stored.
+    func verifyExport(_ operation: CRMExport, activityID: String) async throws {
+        guard operation.preview.portal == credentials.portal else { throw BitrixFailure.malformed }
+        let fields = try await call("crm.activity.get", ["id": .string(activityID)])["result"]?.object ?? [:]
+        let expectedDescription = operation.activityDescription
+        guard fields["ID"]?.text == activityID,
+              fields["OWNER_TYPE_ID"]?.text == "2", fields["OWNER_ID"]?.text == operation.preview.dealID,
+              fields["ORIGINATOR_ID"]?.text == "AXIS_COPILOT", fields["ORIGIN_ID"]?.text == operation.marker,
+              fields["DESCRIPTION"]?.text == expectedDescription,
+              fields["COMPLETED"]?.text == "Y" else {
+            throw CopilotError.message(L10n.string("Дело найдено, но итоги или вложения ещё не подтверждены. Повторная отправка отключена; сверьте результат позже."))
+        }
+        // FILES must be explicitly selected; get does not promise this field.
+        let rows = try await list("crm.activity.list", ["filter": .object(["ID": .string(activityID)]), "select": .array([.string("ID"), .string("FILES")])])
+        guard rows.count == 1, rows[0]["ID"]?.text == activityID else { throw BitrixFailure.malformed }
+        let files = rows[0]["FILES"]?.array ?? []
+        var expected = [CRMExportPreview.sha256(Data(operation.preview.transcript.utf8))]
+        if operation.preview.audioName != nil {
+            guard let audioHash = operation.preview.audioSHA256 else { throw BitrixFailure.malformed }
+            expected.append(audioHash)
+        }
+        guard files.count == expected.count else { throw BitrixFailure.malformed }
+        for file in files {
+            let values = file.object
+            guard let raw = values["url"]?.text, let url = URL(string: raw),
+                  url.scheme == "https", url.host == credentials.portal, url.user == nil, url.password == nil,
+                  url.port == nil || url.port == 443,
+                  url.path == "/bitrix/tools/crm_show_file.php",
+                  let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  parts.queryItems?.first(where: { $0.name == "fileId" })?.value == values["id"]?.text,
+                  parts.queryItems?.first(where: { $0.name == "ownerId" })?.value == activityID,
+                  parts.queryItems?.first(where: { $0.name == "ownerTypeId" })?.value == "6" else { throw BitrixFailure.malformed }
+            var request = URLRequest(url: url); request.httpMethod = "GET"
+            let data: Data; let status: Int
+            do { (data, status) = try await transport.send(request) }
+            catch is CancellationError { throw CancellationError() }
+            catch { throw BitrixFailure.network }
+            guard status == 200, data.count <= 50 * 1024 * 1024,
+                  let index = expected.firstIndex(of: CRMExportPreview.sha256(data)) else { throw BitrixFailure.malformed }
+            expected.remove(at: index)
+        }
+        guard expected.isEmpty else { throw BitrixFailure.malformed }
     }
     /// Remove credential-bearing links before any CRM response becomes a persistent/prompt snapshot.
     static func sanitize(_ value: CRMValue) -> CRMValue {

@@ -318,11 +318,29 @@ enum CapturePhase { case idle, starting, recording, stopping }
     }
     var hasEchoReduced: Bool { echoReducedURL != nil }
 
-    func exportRecording() async {
-        guard let current, let store, !current.chunks.isEmpty, !exporting else { return }
+    var recordingURL: URL? {
+        guard let current, let store, let url = try? store.fileURL(current.id, filename: "meeting.m4a"),
+              FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
+    }
+
+    func prepareRecordingForCRM() async throws -> URL {
+        guard phase == .idle, !processing, !preparingPlayback, !exporting, let current, let store else {
+            throw CopilotError.message(L10n.string("Дождитесь завершения записи и транскрипции"))
+        }
+        if let recordingURL { return recordingURL }
+        guard !current.chunks.isEmpty else { throw CopilotError.message(L10n.string("У этой встречи нет аудиозаписи")) }
         exporting = true
         defer { exporting = false }
-        do { try await RecordingExport.export(session: current, store: store) }
+        try await RecordingExport.export(session: current, store: store)
+        guard self.current?.id == current.id, let recordingURL else {
+            throw CopilotError.message(L10n.string("Встреча изменилась. Откройте отправку заново."))
+        }
+        return recordingURL
+    }
+
+    func exportRecording() async {
+        do { _ = try await prepareRecordingForCRM() }
         catch { self.error = L10n.format("Исходные WAV сохранены; сборка M4A не удалась: %@", String(describing: L10n.error(error))) }
     }
 }

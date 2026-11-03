@@ -4,6 +4,8 @@ import CopilotCore
 @MainActor private final class CRMPanelState: ObservableObject {
     @Published var search = ""
     @Published var includeAudio = true
+    @Published var preparing = false
+    @Published var preparationError: String?
 }
 
 struct CRMPanel: View {
@@ -11,6 +13,7 @@ struct CRMPanel: View {
     var session: MeetingSession?
     var summaryText: String
     var audioURL: URL?
+    var prepareAudio: () async throws -> URL
     var onContextChanged: (String) -> Void = { _ in }
     @StateObject private var ui = CRMPanelState()
     private var selected: DealContext? {
@@ -40,12 +43,25 @@ struct CRMPanel: View {
                         Text(L10n.string("Сохранить результат встречи")).font(.headline)
                         Text(L10n.format("Итоги и транскрипция попадут в сделку №%@ «%@» после вашего подтверждения.", String(describing: context.dealID), String(describing: context.title)))
                             .font(.callout)
-                        Toggle(L10n.string("Приложить запись M4A"), isOn: $ui.includeAudio)
-                        if ui.includeAudio && audioURL == nil { Text(L10n.string("M4A пока отсутствует. Подготовьте запись в плеере или явно выключите вложение аудио.")).font(.caption).foregroundStyle(.secondary) }
+                        Toggle(L10n.string("Приложить запись M4A"), isOn: $ui.includeAudio).disabled(ui.preparing)
+                        if ui.preparing { ProgressView(L10n.string("Подготовка записи…")) }
+                        if let error = ui.preparationError { Text(error).foregroundStyle(.red).textSelection(.enabled) }
                         Text(L10n.string("Сохраняется обычное завершённое дело «Встреча» с итогами и транскрипцией. Анализ записи внутри Битрикс24 не подтверждён.")).font(.caption).foregroundStyle(.secondary)
-                        Button(L10n.string("Сохранить встречу в эту сделку…")) { controller.prepareExport(session: session, summary: summaryText, audioURL: ui.includeAudio ? audioURL : nil) }
+                        Button(L10n.string("Сохранить встречу в эту сделку…")) {
+                            ui.preparationError = nil
+                            ui.preparing = true
+                            let includeAudio = ui.includeAudio
+                            Task {
+                                defer { ui.preparing = false }
+                                do {
+                                    let preparedAudio = includeAudio ? try await prepareAudio() : nil
+                                    guard self.session?.id == session.id else { return }
+                                    controller.prepareExport(session: session, summary: summaryText, audioURL: preparedAudio)
+                                } catch { ui.preparationError = L10n.error(error) }
+                            }
+                        }
                             .buttonStyle(.borderedProminent)
-                            .disabled(controller.busy || !controller.connected || (ui.includeAudio && audioURL == nil))
+                            .disabled(controller.busy || ui.preparing || !controller.connected || session.state == .recording || session.state == .processing)
                     }
                     DisclosureGroup(L10n.string("Контекст сделки и все поля")) {
                         VStack(alignment: .leading, spacing: 10) {
